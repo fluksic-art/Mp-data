@@ -21,7 +21,10 @@ vendor/
 dist/
 build/
 out/
+.next/
+.turbo/
 
 # Logs
 *.log
 npm-debug.log*
+

@@ -1,0 +1,13 @@
+{
+  "name": "@mpgenesis/paraphrase-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  }
+}

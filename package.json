@@ -1,8 +1,9 @@
 {
   "name": "mpgenesis",
   "private": true,
-  "version": "0.0.1",
-  "description": "Sistema de clonación de marketplaces inmobiliarios con SEO programático",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Real estate lead generation marketplace with programmatic SEO",
   "packageManager": "pnpm@9.15.4",
   "engines": {
     "node": ">=20"
@@ -11,6 +12,17 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "crawl": "pnpm --filter @mpgenesis/crawl-worker run crawl"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.0",
+    "tsx": "^4.21.0",
+    "turbo": "^2.9.5",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.1",
+    "vitest": "^4.1.3"
   }
 }
