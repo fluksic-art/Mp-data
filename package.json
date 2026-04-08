@@ -1,0 +1,16 @@
+{
+  "name": "mpgenesis",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Sistema de clonación de marketplaces inmobiliarios con SEO programático",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck"
+  }
+}
