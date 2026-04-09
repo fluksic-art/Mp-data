@@ -17,5 +17,9 @@
   },
   "devDependencies": {
     "zod": "^4.3.6"
+  },
+  "dependencies": {
+    "bullmq": "^5.73.1",
+    "pino": "^10.3.1"
   }
 }
