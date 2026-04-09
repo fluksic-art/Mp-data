@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { LeadForm, WhatsAppCTA } from "@/components/lead-form";
+import { ContentPreview } from "@/components/content-preview";
 
 export default async function ListingDetailPage({
   params,
@@ -131,11 +132,17 @@ export default async function ListingDetailPage({
 
       <Separator className="my-8" />
 
-      {/* Two-column layout: description + details */}
+      {/* Two-column layout: content + details */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        {/* Description — left 2/3 */}
+        {/* Content — left 2/3 */}
         <div className="lg:col-span-2 space-y-8">
-          <DescriptionSection rawData={rawData} />
+          {/* Multilingual content preview */}
+          <ContentPreview
+            contentEs={listing.contentEs as Record<string, string> | null}
+            contentEn={listing.contentEn as Record<string, string> | null}
+            contentFr={listing.contentFr as Record<string, string> | null}
+            rawData={rawData}
+          />
 
           {/* Gallery */}
           {imageUrls.length > 1 && (
@@ -261,40 +268,6 @@ function FactCard({
         </p>
       </CardContent>
     </Card>
-  );
-}
-
-function DescriptionSection({
-  rawData,
-}: {
-  rawData: Record<string, unknown>;
-}) {
-  const description = rawData["description"] as string | undefined;
-  if (!description) return null;
-
-  const cleaned = description
-    .replace(/&amp;/g, "&")
-    .replace(/&#\d+;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\t/g, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-  return (
-    <div>
-      <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-        Description
-      </h2>
-      <Card>
-        <CardContent className="py-5">
-          <div className="max-h-[500px] overflow-auto text-sm leading-7 text-foreground/80 whitespace-pre-line">
-            {cleaned}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
   );
 }
 
