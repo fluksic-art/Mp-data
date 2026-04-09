@@ -19,6 +19,7 @@ export interface CrawlResult {
 export interface CrawlerOptions {
   domain: string;
   maxPages?: number | undefined;
+  startUrl?: string | undefined;
   sourceId: string;
   crawlRunId: string;
 }
@@ -44,52 +45,44 @@ export async function runCrawler(opts: CrawlerOptions): Promise<CrawlResult> {
 
     log.info(`[${pageType}] ${url}`);
 
-    if (pageType === "skip") {
-      return;
-    }
-
     if (pageType === "sitemap") {
       await handleSitemap(ctx, baseUrl);
       return;
     }
 
-    // Get the full HTML
-    const html = await page.content();
-    result.pages.set(url, { url, html, pageType });
-    result.pagesCrawled++;
+    // For listing_index and property_detail, save the HTML
+    if (pageType === "listing_index" || pageType === "property_detail") {
+      const html = await page.content();
+      result.pages.set(url, { url, html, pageType });
+      result.pagesCrawled++;
 
-    logger.info(
-      { sourceId, crawlRunId, url, pageType, pagesCrawled: result.pagesCrawled },
-      `Crawled page`,
-    );
-
-    // If listing index, follow links to property details
-    if (pageType === "listing_index") {
-      await enqueueLinks({
-        strategy: "same-domain",
-        transformRequestFunction: (req) => {
-          if (isListingRelated(req.url)) {
-            return req;
-          }
-          return false;
-        },
-      });
-
-      // Handle pagination
-      await handlePagination(ctx);
+      logger.info(
+        { sourceId, crawlRunId, url, pageType, pagesCrawled: result.pagesCrawled },
+        `Crawled page`,
+      );
     }
 
-    // If property detail, also enqueue any related listings
-    if (pageType === "property_detail") {
-      await enqueueLinks({
-        strategy: "same-domain",
-        transformRequestFunction: (req) => {
-          if (isListingRelated(req.url)) {
-            return req;
-          }
-          return false;
-        },
-      });
+    // From any non-sitemap page, follow links to listings
+    // Property details get higher priority (0) than indexes (1)
+    await enqueueLinks({
+      strategy: "same-domain",
+      transformRequestFunction: (req) => {
+        const type = classifyUrl(req.url);
+        if (type === "property_detail") {
+          req.priority = 0;
+          return req;
+        }
+        if (type === "listing_index") {
+          req.priority = 1;
+          return req;
+        }
+        return false;
+      },
+    });
+
+    // Handle pagination on listing indexes
+    if (pageType === "listing_index") {
+      await handlePagination(ctx);
     }
   });
 
@@ -119,8 +112,9 @@ export async function runCrawler(opts: CrawlerOptions): Promise<CrawlResult> {
     },
   });
 
-  // Start with sitemap discovery, then fall back to homepage
+  // Start with provided URL, sitemap discovery, then homepage
   const startUrls = [
+    ...(opts.startUrl ? [opts.startUrl] : []),
     `${baseUrl}/sitemap.xml`,
     `${baseUrl}/wp-sitemap.xml`,
     baseUrl,
@@ -160,14 +154,25 @@ async function handleSitemap(
     }
   }
 
-  log.info(`Sitemap: found ${urls.length} URLs`);
+  // Separate sub-sitemaps from page URLs
+  const subSitemaps = urls.filter((u) => /sitemap.*\.xml/i.test(u));
+  const pageUrls = urls.filter((u) => !/sitemap.*\.xml/i.test(u));
 
-  if (urls.length > 0) {
+  log.info(
+    `Sitemap: found ${urls.length} URLs (${subSitemaps.length} sub-sitemaps, ${pageUrls.length} pages)`,
+  );
+
+  // Always follow sub-sitemaps
+  if (subSitemaps.length > 0) {
+    await enqueueLinks({ urls: subSitemaps });
+  }
+
+  // Filter page URLs to listing-relevant ones
+  if (pageUrls.length > 0) {
     await enqueueLinks({
-      urls,
+      urls: pageUrls,
       transformRequestFunction: (req) => {
         const type = classifyUrl(req.url);
-        // Enqueue sitemaps (nested), listing indexes, and property details
         if (type !== "skip") {
           return req;
         }

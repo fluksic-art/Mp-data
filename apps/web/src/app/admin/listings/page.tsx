@@ -1,7 +1,17 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { properties, sources } from "@mpgenesis/database";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, count } from "drizzle-orm";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default async function ListingsPage() {
   const db = getDb();
@@ -16,6 +26,8 @@ export default async function ListingsPage() {
       currency: properties.currency,
       city: properties.city,
       state: properties.state,
+      bedrooms: properties.bedrooms,
+      constructionM2: properties.constructionM2,
       status: properties.status,
       sourceDomain: sources.domain,
       firstSeenAt: properties.firstSeenAt,
@@ -25,102 +37,121 @@ export default async function ListingsPage() {
     .orderBy(desc(properties.firstSeenAt))
     .limit(100);
 
+  const [total] = await db.select({ value: count() }).from(properties);
+
   return (
     <div>
-      <h1 className="text-2xl font-bold">Listings</h1>
-      <p className="mt-1 text-sm text-gray-500">
-        {listings.length} properties found
-      </p>
+      <div className="mb-6 flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
+          <p className="text-sm text-muted-foreground">
+            {total?.value ?? 0} properties extracted
+          </p>
+        </div>
+      </div>
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                Title
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                Type
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                Price
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                Location
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                Source
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[40%]">Property</TableHead>
+              <TableHead>Price</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {listings.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-8 text-center text-sm text-gray-500"
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="py-12 text-center text-muted-foreground"
                 >
                   No listings yet. Run{" "}
-                  <code className="rounded bg-gray-100 px-1 py-0.5">
+                  <code className="rounded-md bg-muted px-1.5 py-0.5 text-xs">
                     pnpm crawl &lt;domain&gt;
                   </code>{" "}
-                  to start.
-                </td>
-              </tr>
+                  to start extracting.
+                </TableCell>
+              </TableRow>
             ) : (
               listings.map((listing) => (
-                <tr key={listing.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
+                <TableRow key={listing.id} className="group">
+                  <TableCell>
                     <Link
                       href={`/admin/listings/${listing.id}`}
-                      className="text-sm font-medium text-blue-600 hover:underline"
+                      className="block"
                     >
-                      {listing.title}
+                      <p className="text-sm font-medium group-hover:text-primary">
+                        {cleanTitle(listing.title)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {listing.propertyType}
+                        {listing.bedrooms ? ` · ${listing.bedrooms} bed` : ""}
+                        {listing.constructionM2
+                          ? ` · ${listing.constructionM2} m²`
+                          : ""}
+                      </p>
                     </Link>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {listing.propertyType} / {listing.listingType}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
+                  </TableCell>
+                  <TableCell className="tabular-nums">
                     {listing.priceCents
-                      ? `${(listing.priceCents / 100).toLocaleString()} ${listing.currency}`
+                      ? formatPrice(listing.priceCents, listing.currency)
                       : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {listing.city}, {listing.state}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
-                    {listing.sourceDomain ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm">{listing.city}</span>
+                    <br />
+                    <span className="text-xs text-muted-foreground">
+                      {listing.state}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs text-muted-foreground">
+                      {listing.sourceDomain ?? "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
                     <StatusBadge status={listing.status} />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }
 
+function cleanTitle(title: string): string {
+  return title.replace(/&#\d+;/g, "'").replace(/&amp;/g, "&");
+}
+
+function formatPrice(cents: number, currency: string): string {
+  const amount = cents / 100;
+  const symbol = currency === "USD" ? "$" : currency === "EUR" ? "€" : "$";
+  const formatted = amount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  return `${symbol}${formatted} ${currency}`;
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    draft: "bg-gray-100 text-gray-700",
-    review: "bg-yellow-100 text-yellow-700",
-    published: "bg-green-100 text-green-700",
-    archived: "bg-red-100 text-red-700",
-  };
+  const variant =
+    status === "published"
+      ? "default"
+      : status === "review"
+        ? "secondary"
+        : status === "failed" || status === "archived"
+          ? "destructive"
+          : "outline";
 
   return (
-    <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] ?? "bg-gray-100 text-gray-700"}`}
-    >
+    <Badge variant={variant} className="text-[11px]">
       {status}
-    </span>
+    </Badge>
   );
 }

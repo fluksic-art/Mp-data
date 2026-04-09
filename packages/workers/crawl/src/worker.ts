@@ -23,7 +23,7 @@ export class CrawlWorker extends BaseWorker<"crawl"> {
   }
 
   protected async process(job: Job<CrawlJobData>): Promise<void> {
-    const { sourceId, crawlRunId, domain, maxPages } = job.data;
+    const { sourceId, crawlRunId, domain, maxPages, startUrl } = job.data;
     const db = createDb();
     const logger = createLogger("crawl-worker");
 
@@ -38,6 +38,7 @@ export class CrawlWorker extends BaseWorker<"crawl"> {
       const result = await runCrawler({
         domain,
         maxPages,
+        startUrl,
         sourceId,
         crawlRunId,
       });

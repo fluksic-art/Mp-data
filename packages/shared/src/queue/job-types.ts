@@ -7,7 +7,8 @@ export interface CrawlJobData {
   sourceId: string;
   crawlRunId: string;
   domain: string;
-  maxPages?: number;
+  maxPages?: number | undefined;
+  startUrl?: string | undefined;
 }
 
 export interface ExtractJobData {

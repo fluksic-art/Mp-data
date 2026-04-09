@@ -14,10 +14,11 @@ const logger = createLogger("crawl-cli");
 async function main() {
   const domain = process.argv[2];
   const maxPages = process.argv[3] ? Number(process.argv[3]) : 100;
+  const startUrl = process.argv[4] ?? undefined;
 
   if (!domain) {
-    console.error("Usage: pnpm crawl <domain> [maxPages]");
-    console.error("Example: pnpm crawl inmobiliariaplaya.com 50");
+    console.error("Usage: pnpm crawl <domain> [maxPages] [startUrl]");
+    console.error("Example: pnpm crawl plalla.com 30 https://plalla.com/en/status/pre-construction/");
     process.exit(1);
   }
 
@@ -63,6 +64,7 @@ async function main() {
     crawlRunId,
     domain,
     maxPages,
+    startUrl,
   });
 
   logger.info(

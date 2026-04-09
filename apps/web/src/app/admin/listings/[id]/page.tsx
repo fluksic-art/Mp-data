@@ -3,6 +3,9 @@ import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { properties, sources, propertyImages } from "@mpgenesis/database";
 import { eq } from "drizzle-orm";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
 export default async function ListingDetailPage({
   params,
@@ -34,45 +37,67 @@ export default async function ListingDetailPage({
     .where(eq(propertyImages.propertyId, id))
     .orderBy(propertyImages.position);
 
+  const rawData = listing.rawData as Record<string, unknown>;
+  const imageUrls = getImageUrls(images, rawData);
+  const heroImage = imageUrls[0] ?? null;
+
   return (
     <div>
+      {/* Breadcrumb */}
       <Link
         href="/admin/listings"
-        className="text-sm text-blue-600 hover:underline"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        &larr; Back to listings
+        ← Back to listings
       </Link>
 
-      <div className="mt-4 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{listing.title}</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {listing.propertyType} / {listing.listingType} &middot;{" "}
-            {listing.city}, {listing.state}
-          </p>
+      {/* Hero section */}
+      <div className="mt-4">
+        {heroImage && (
+          <div className="mb-6 aspect-[21/9] overflow-hidden rounded-xl border bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={heroImage}
+              alt={cleanTitle(listing.title)}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        )}
+
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {cleanTitle(listing.title)}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {listing.propertyType} · {listing.listingType} · {listing.city},{" "}
+              {listing.state}
+            </p>
+          </div>
+          <StatusBadge status={listing.status} />
         </div>
-        <StatusBadge status={listing.status} />
       </div>
 
-      {/* Facts grid — P1: all from typed DB columns, never LLM */}
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Fact
+      {/* Key facts */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <FactCard
           label="Price"
           value={
             listing.priceCents
-              ? `$${(listing.priceCents / 100).toLocaleString()} ${listing.currency}`
+              ? formatPrice(listing.priceCents, listing.currency)
               : null
           }
+          highlight
         />
-        <Fact
+        <FactCard
           label="Bedrooms"
           value={listing.bedrooms != null ? String(listing.bedrooms) : null}
         />
-        <Fact
+        <FactCard
           label="Bathrooms"
           value={listing.bathrooms != null ? String(listing.bathrooms) : null}
         />
-        <Fact
+        <FactCard
           label="Construction"
           value={
             listing.constructionM2 != null
@@ -80,11 +105,11 @@ export default async function ListingDetailPage({
               : null
           }
         />
-        <Fact
+        <FactCard
           label="Land"
           value={listing.landM2 != null ? `${listing.landM2} m²` : null}
         />
-        <Fact
+        <FactCard
           label="Parking"
           value={
             listing.parkingSpaces != null
@@ -92,90 +117,227 @@ export default async function ListingDetailPage({
               : null
           }
         />
-        <Fact label="Source" value={source?.domain ?? null} />
-        <Fact
+        <FactCard label="Source" value={source?.domain ?? null} />
+        <FactCard
           label="First seen"
-          value={listing.firstSeenAt.toLocaleDateString()}
+          value={listing.firstSeenAt.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })}
         />
       </div>
 
-      {/* Source URL */}
-      <div className="mt-6">
-        <h2 className="text-sm font-medium text-gray-500">Source URL</h2>
-        <a
-          href={listing.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 text-sm text-blue-600 hover:underline"
-        >
-          {listing.sourceUrl}
-        </a>
-      </div>
+      <Separator className="my-8" />
 
-      {/* Images */}
-      {images.length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-sm font-medium text-gray-500">
-            Images ({images.length})
-          </h2>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {images.map((img) => (
-              <div
-                key={img.id}
-                className="aspect-video overflow-hidden rounded-md border bg-gray-100"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.cleanUrl ?? img.rawUrl ?? img.originalUrl}
-                  alt={img.altText ?? `Image ${img.position}`}
-                  className="h-full w-full object-cover"
-                />
+      {/* Two-column layout: description + details */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        {/* Description — left 2/3 */}
+        <div className="lg:col-span-2 space-y-8">
+          <DescriptionSection rawData={rawData} />
+
+          {/* Gallery */}
+          {imageUrls.length > 1 && (
+            <div>
+              <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+                Gallery ({imageUrls.length})
+              </h2>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {imageUrls.map((url, i) => (
+                  <div
+                    key={url}
+                    className="aspect-[4/3] overflow-hidden rounded-lg border bg-muted"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={`Image ${i + 1}`}
+                      className="h-full w-full object-cover transition-transform hover:scale-105"
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Raw data */}
-      <div className="mt-6">
-        <h2 className="text-sm font-medium text-gray-500">Extracted Data</h2>
-        <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-gray-50 p-4 text-xs">
-          {JSON.stringify(listing.extractedData, null, 2)}
-        </pre>
-      </div>
+        {/* Sidebar — right 1/3 */}
+        <div className="space-y-4">
+          {/* Source link */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Source</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <a
+                href={listing.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-sm text-primary hover:underline"
+              >
+                {listing.sourceUrl}
+              </a>
+            </CardContent>
+          </Card>
 
-      <div className="mt-4">
-        <h2 className="text-sm font-medium text-gray-500">Raw Data</h2>
-        <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-gray-50 p-4 text-xs">
-          {JSON.stringify(listing.rawData, null, 2)}
-        </pre>
+          {/* Coordinates */}
+          {listing.latitude && listing.longitude && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Coordinates
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-mono text-sm">
+                  {listing.latitude}, {listing.longitude}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Metadata */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Metadata</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <MetaRow label="ID" value={listing.id.slice(0, 8) + "..."} />
+              <MetaRow label="Source ID" value={listing.sourceListingId} />
+              <MetaRow label="Content hash" value={listing.contentHash.slice(0, 12) + "..."} />
+              <MetaRow
+                label="Last seen"
+                value={listing.lastSeenAt.toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Raw JSON (collapsible) */}
+          <details className="group">
+            <summary className="cursor-pointer rounded-lg border bg-card px-4 py-3 text-sm font-medium hover:bg-accent">
+              Raw JSON Data
+            </summary>
+            <pre className="mt-2 max-h-80 overflow-auto rounded-lg border bg-muted/50 p-4 text-[11px] leading-relaxed">
+              {JSON.stringify(rawData, null, 2)}
+            </pre>
+          </details>
+        </div>
       </div>
     </div>
   );
 }
 
-function Fact({ label, value }: { label: string; value: string | null }) {
+function FactCard({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string | null;
+  highlight?: boolean;
+}) {
   return (
-    <div className="rounded-md border border-gray-200 bg-white p-3">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-0.5 text-sm font-medium">{value ?? "—"}</p>
+    <Card className={highlight ? "border-primary/20 bg-primary/5" : ""}>
+      <CardContent className="px-4 py-3">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
+        <p
+          className={`mt-1 text-sm font-semibold ${highlight ? "text-primary" : ""} ${!value ? "text-muted-foreground" : ""}`}
+        >
+          {value ?? "—"}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DescriptionSection({
+  rawData,
+}: {
+  rawData: Record<string, unknown>;
+}) {
+  const description = rawData["description"] as string | undefined;
+  if (!description) return null;
+
+  const cleaned = description
+    .replace(/&amp;/g, "&")
+    .replace(/&#\d+;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\t/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return (
+    <div>
+      <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+        Description
+      </h2>
+      <Card>
+        <CardContent className="py-5">
+          <div className="max-h-[500px] overflow-auto text-sm leading-7 text-foreground/80 whitespace-pre-line">
+            {cleaned}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono text-xs">{value}</span>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    draft: "bg-gray-100 text-gray-700",
-    review: "bg-yellow-100 text-yellow-700",
-    published: "bg-green-100 text-green-700",
-    archived: "bg-red-100 text-red-700",
-  };
+  const variant =
+    status === "published"
+      ? "default"
+      : status === "review"
+        ? "secondary"
+        : status === "failed" || status === "archived"
+          ? "destructive"
+          : "outline";
 
-  return (
-    <span
-      className={`inline-block rounded-full px-2 py-1 text-xs font-medium ${colors[status] ?? "bg-gray-100 text-gray-700"}`}
-    >
-      {status}
-    </span>
-  );
+  return <Badge variant={variant}>{status}</Badge>;
+}
+
+function cleanTitle(title: string): string {
+  return title.replace(/&#\d+;/g, "'").replace(/&amp;/g, "&");
+}
+
+function formatPrice(cents: number, currency: string): string {
+  const amount = cents / 100;
+  const symbol = currency === "USD" ? "$" : currency === "EUR" ? "€" : "$";
+  return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${currency}`;
+}
+
+function getImageUrls(
+  images: Array<{
+    cleanUrl: string | null;
+    rawUrl: string | null;
+    originalUrl: string;
+  }>,
+  rawData: Record<string, unknown>,
+): string[] {
+  if (images.length > 0) {
+    return images.map((img) => img.cleanUrl ?? img.rawUrl ?? img.originalUrl);
+  }
+  if (Array.isArray(rawData["image"])) {
+    return rawData["image"] as string[];
+  }
+  if (typeof rawData["image"] === "string") {
+    return [rawData["image"]];
+  }
+  return [];
 }

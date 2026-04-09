@@ -33,6 +33,11 @@ const LISTING_INDEX_PATTERNS = [
   /\/renta\/?$/i,
   /\/departamentos/i,
   /\/casas/i,
+  /\/status\//i,
+  /\/estatus\//i,
+  /\/type\//i,
+  /\/city\//i,
+  /\/label\//i,
 ];
 
 const SKIP_PATTERNS = [
