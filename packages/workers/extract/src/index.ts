@@ -1,1 +1,1 @@
-export {};
+export { ExtractWorker } from "./worker.js";
