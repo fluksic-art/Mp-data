@@ -8,6 +8,14 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "start": "tsx src/start.ts"
+  },
+  "dependencies": {
+    "@mpgenesis/shared": "workspace:*",
+    "@mpgenesis/database": "workspace:*",
+    "@anthropic-ai/sdk": "^0.86.1",
+    "bullmq": "^5.52.0",
+    "drizzle-orm": "^0.45.2"
   }
 }

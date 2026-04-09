@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { LeadForm, WhatsAppCTA } from "@/components/lead-form";
 
 export default async function ListingDetailPage({
   params,
@@ -163,6 +164,13 @@ export default async function ListingDetailPage({
 
         {/* Sidebar — right 1/3 */}
         <div className="space-y-4">
+          {/* P8: Lead capture — WhatsApp + form */}
+          <WhatsAppCTA
+            propertyTitle={cleanTitle(listing.title)}
+            propertyUrl={listing.sourceUrl}
+          />
+          <LeadForm propertyId={listing.id} />
+
           {/* Source link */}
           <Card>
             <CardHeader className="pb-2">
