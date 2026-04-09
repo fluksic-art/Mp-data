@@ -9,6 +9,16 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint src/",
-    "crawl": "tsx src/cli.ts"
+    "crawl": "tsx src/cli.ts",
+    "start": "tsx src/start.ts"
+  },
+  "dependencies": {
+    "@crawlee/playwright": "^3.16.0",
+    "@mpgenesis/database": "workspace:*",
+    "@mpgenesis/shared": "workspace:*",
+    "bullmq": "^5.73.1",
+    "crawlee": "^3.16.0",
+    "drizzle-orm": "^0.45.2",
+    "playwright": "^1.59.1"
   }
 }
