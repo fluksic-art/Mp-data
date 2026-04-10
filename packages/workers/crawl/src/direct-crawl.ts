@@ -66,13 +66,21 @@ async function main() {
       await page.goto(currentUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
       await page.waitForTimeout(2000);
 
-      // Extract /property/ links
+      // Extract /property/ links (filter to anchors with href attribute,
+      // exclude WhatsApp share links that contain /property/ in text)
       const links = await page.$$eval("a[href]", (anchors) =>
-        anchors.map((a) => a.href),
+        anchors
+          .map((a) => (a as HTMLAnchorElement).href)
+          .filter((href) => typeof href === "string"),
       );
 
       for (const link of links) {
-        if (/\/property\//.test(link) && propertyUrls.size < maxProperties) {
+        // Only same-domain property pages, no whatsapp/social share links
+        if (
+          /\/property\//.test(link) &&
+          !/whatsapp|wa\.me|facebook|twitter/i.test(link) &&
+          propertyUrls.size < maxProperties
+        ) {
           propertyUrls.add(link);
         }
       }

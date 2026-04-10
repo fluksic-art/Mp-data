@@ -68,11 +68,9 @@ export class ExtractWorker extends BaseWorker<"extract"> {
         priceCents: data.priceCents ?? null,
         currency: data.currency ?? "MXN",
         bedrooms: data.bedrooms ?? null,
-        bathrooms: data.bathrooms != null ? String(data.bathrooms) : null,
-        constructionM2: data.constructionM2 != null
-          ? String(data.constructionM2)
-          : null,
-        landM2: data.landM2 != null ? String(data.landM2) : null,
+        bathrooms: data.bathrooms ?? null,
+        constructionM2: data.constructionM2 ?? null,
+        landM2: data.landM2 ?? null,
         parkingSpaces: data.parkingSpaces ?? null,
         country: "MX",
         state: data.state ?? "",
@@ -97,11 +95,9 @@ export class ExtractWorker extends BaseWorker<"extract"> {
           priceCents: data.priceCents ?? null,
           currency: data.currency ?? "MXN",
           bedrooms: data.bedrooms ?? null,
-          bathrooms: data.bathrooms != null ? String(data.bathrooms) : null,
-          constructionM2: data.constructionM2 != null
-            ? String(data.constructionM2)
-            : null,
-          landM2: data.landM2 != null ? String(data.landM2) : null,
+          bathrooms: data.bathrooms ?? null,
+          constructionM2: data.constructionM2 ?? null,
+          landM2: data.landM2 ?? null,
           parkingSpaces: data.parkingSpaces ?? null,
           state: data.state ?? "",
           city: data.city ?? "",

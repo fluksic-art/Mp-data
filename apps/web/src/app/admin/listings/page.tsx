@@ -27,6 +27,7 @@ export default async function ListingsPage() {
       city: properties.city,
       state: properties.state,
       bedrooms: properties.bedrooms,
+      bathrooms: properties.bathrooms,
       constructionM2: properties.constructionM2,
       status: properties.status,
       sourceDomain: sources.domain,
@@ -89,6 +90,9 @@ export default async function ListingsPage() {
                       <p className="text-xs text-muted-foreground">
                         {listing.propertyType}
                         {listing.bedrooms ? ` · ${listing.bedrooms} bed` : ""}
+                        {listing.bathrooms != null
+                          ? ` · ${listing.bathrooms} bath`
+                          : ""}
                         {listing.constructionM2
                           ? ` · ${listing.constructionM2} m²`
                           : ""}

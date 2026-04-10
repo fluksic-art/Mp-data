@@ -30,9 +30,9 @@ export const properties = pgTable(
     priceCents: bigint("price_cents", { mode: "number" }),
     currency: text().notNull().default("MXN"),
     bedrooms: smallint(),
-    bathrooms: numeric({ precision: 3, scale: 1 }),
-    constructionM2: numeric("construction_m2"),
-    landM2: numeric("land_m2"),
+    bathrooms: numeric({ precision: 3, scale: 1, mode: "number" }),
+    constructionM2: numeric("construction_m2", { mode: "number" }),
+    landM2: numeric("land_m2", { mode: "number" }),
     parkingSpaces: smallint("parking_spaces"),
 
     // Location

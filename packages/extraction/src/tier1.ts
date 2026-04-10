@@ -57,7 +57,9 @@ interface JsonLdListing {
     value?: string | number;
   };
   numberOfRooms?: number;
+  numberOfBedrooms?: number;
   numberOfBathroomsTotal?: number;
+  numberOfFullBathrooms?: number;
 }
 
 function extractJsonLd($: cheerio.CheerioAPI): JsonLdListing | null {
@@ -126,10 +128,12 @@ function mapJsonLdToProperty(
   const price = ld.offers?.price;
   const priceCents = price ? Math.round(Number(price) * 100) : null;
   const currency = ld.offers?.priceCurrency ?? "MXN";
+  const title = decodeHtmlEntities(ld.name ?? "");
 
   return {
     sourceUrl,
-    title: ld.name ?? "",
+    title,
+    propertyType: inferPropertyType(ld["@type"], title),
     priceCents: priceCents && !isNaN(priceCents) ? priceCents : null,
     currency: normalizeCurrency(currency),
     state: ld.address?.addressRegion ?? "",
@@ -141,10 +145,52 @@ function mapJsonLdToProperty(
     constructionM2: ld.floorSize?.value
       ? Number(ld.floorSize.value)
       : null,
-    bedrooms: ld.numberOfRooms ?? null,
-    bathrooms: ld.numberOfBathroomsTotal ?? null,
+    bedrooms: ld.numberOfBedrooms ?? ld.numberOfRooms ?? null,
+    bathrooms:
+      ld.numberOfBathroomsTotal ?? ld.numberOfFullBathrooms ?? null,
     rawData: ld as Record<string, unknown>,
   };
+}
+
+/** Decode common HTML entities in text (for titles from JSON-LD) */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) =>
+      String.fromCharCode(parseInt(code, 16)),
+    );
+}
+
+/** Infer property type from JSON-LD @type and title keywords */
+function inferPropertyType(
+  jsonLdType: string | undefined,
+  title: string,
+): "apartment" | "house" | "land" | "villa" | "penthouse" | "office" | "commercial" {
+  // Check JSON-LD @type first
+  if (jsonLdType) {
+    const t = jsonLdType.toLowerCase();
+    if (t.includes("house") || t.includes("residence")) return "house";
+    if (t.includes("apartment")) return "apartment";
+  }
+
+  // Fall back to title keyword matching
+  const lower = title.toLowerCase();
+  if (/\bpenthouse\b/.test(lower)) return "penthouse";
+  if (/\bvilla\b/.test(lower)) return "villa";
+  if (/\b(house|casa|home|maison)\b/.test(lower)) return "house";
+  if (/\b(land|terreno|lot|plot)\b/.test(lower)) return "land";
+  if (/\b(office|oficina)\b/.test(lower)) return "office";
+  if (/\b(commercial|local)\b/.test(lower)) return "commercial";
+  if (/\b(apartment|condo|departamento|loft|studio)\b/.test(lower))
+    return "apartment";
+
+  // Default
+  return "apartment";
 }
 
 interface OgData {

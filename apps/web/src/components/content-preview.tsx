@@ -30,6 +30,7 @@ export function ContentPreview({
   rawData: Record<string, unknown>;
 }) {
   const [activeLocale, setActiveLocale] = useState<"es" | "en" | "fr">("es");
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const contents: Record<string, LocalizedContent | null> = {
     es: contentEs,
@@ -40,39 +41,55 @@ export function ContentPreview({
   const active = contents[activeLocale];
   const hasAnyContent = contentEs || contentEn || contentFr;
 
-  // Fallback to raw description if no paraphrased content
   const rawDescription = rawData["description"] as string | undefined;
+  const rawName = rawData["name"] as string | undefined;
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium text-muted-foreground">
           Content Preview
         </h2>
 
-        {/* Locale tabs */}
-        <div className="flex gap-1 rounded-lg border bg-muted/50 p-1">
-          {LOCALES.map((locale) => {
-            const hasContent = contents[locale.key] !== null;
-            return (
-              <button
-                key={locale.key}
-                onClick={() => setActiveLocale(locale.key)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                  activeLocale === locale.key
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {locale.flag}
-                {hasContent ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                ) : (
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-300" />
-                )}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          {/* Compare toggle */}
+          {hasAnyContent && rawDescription && (
+            <button
+              onClick={() => setShowOriginal(!showOriginal)}
+              className={`rounded-md border px-3 py-1 text-xs font-medium transition-colors ${
+                showOriginal
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "bg-background text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {showOriginal ? "Hide original" : "Compare with original"}
+            </button>
+          )}
+
+          {/* Locale tabs */}
+          <div className="flex gap-1 rounded-lg border bg-muted/50 p-1">
+            {LOCALES.map((locale) => {
+              const hasContent = contents[locale.key] !== null;
+              return (
+                <button
+                  key={locale.key}
+                  onClick={() => setActiveLocale(locale.key)}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    activeLocale === locale.key
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {locale.flag}
+                  {hasContent ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-300" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -82,7 +99,7 @@ export function ContentPreview({
           <Card className="border-dashed">
             <CardContent className="py-4">
               <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                SEO Preview
+                SEO Preview (Google SERP)
               </p>
               <p className="text-base font-medium text-blue-700">
                 {active.metaTitle ?? active.title ?? "—"}
@@ -97,46 +114,33 @@ export function ContentPreview({
           </Card>
 
           {/* H1 */}
-          <Card>
-            <CardContent className="py-4">
-              <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                H1 Heading
-              </p>
-              <h3 className="text-lg font-semibold">{active.h1 ?? "—"}</h3>
-            </CardContent>
-          </Card>
+          <CompareBlock
+            label="H1 Heading"
+            locale={activeLocale}
+            showOriginal={showOriginal}
+            originalValue={cleanText(rawName ?? "")}
+            paraphrasedValue={active.h1 ?? "—"}
+            variant="heading"
+          />
 
           {/* Title */}
-          <Card>
-            <CardContent className="py-4">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Paraphrased Title
-                </p>
-                <Badge variant="outline" className="text-[10px]">
-                  {activeLocale.toUpperCase()}
-                </Badge>
-              </div>
-              <p className="text-sm font-medium">{active.title ?? "—"}</p>
-            </CardContent>
-          </Card>
+          <CompareBlock
+            label="Title"
+            locale={activeLocale}
+            showOriginal={showOriginal}
+            originalValue={cleanText(rawName ?? "")}
+            paraphrasedValue={active.title ?? "—"}
+          />
 
           {/* Description */}
-          <Card>
-            <CardContent className="py-4">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Paraphrased Description
-                </p>
-                <Badge variant="outline" className="text-[10px]">
-                  {activeLocale.toUpperCase()}
-                </Badge>
-              </div>
-              <div className="max-h-[500px] overflow-auto text-sm leading-7 text-foreground/80 whitespace-pre-line">
-                {cleanText(active.description ?? "")}
-              </div>
-            </CardContent>
-          </Card>
+          <CompareBlock
+            label="Description"
+            locale={activeLocale}
+            showOriginal={showOriginal}
+            originalValue={cleanText(rawDescription ?? "")}
+            paraphrasedValue={cleanText(active.description ?? "")}
+            long
+          />
         </div>
       ) : hasAnyContent ? (
         <Card className="border-dashed">
@@ -149,19 +153,24 @@ export function ContentPreview({
           </CardContent>
         </Card>
       ) : (
-        /* Fallback: raw description */
+        /* Fallback: raw content only */
         <Card>
           <CardContent className="py-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Original Description (not yet paraphrased)
+                Original (not yet paraphrased)
               </p>
               <Badge variant="secondary" className="text-[10px]">
                 RAW
               </Badge>
             </div>
+            <p className="mb-3 text-sm font-medium">
+              {cleanText(rawName ?? "—")}
+            </p>
             <div className="max-h-[400px] overflow-auto text-sm leading-7 text-foreground/60 whitespace-pre-line">
-              {rawDescription ? cleanText(rawDescription) : "No description available"}
+              {rawDescription
+                ? cleanText(rawDescription)
+                : "No description available"}
             </div>
           </CardContent>
         </Card>
@@ -170,10 +179,95 @@ export function ContentPreview({
   );
 }
 
+function CompareBlock({
+  label,
+  locale,
+  showOriginal,
+  originalValue,
+  paraphrasedValue,
+  long = false,
+  variant = "body",
+}: {
+  label: string;
+  locale: string;
+  showOriginal: boolean;
+  originalValue: string;
+  paraphrasedValue: string;
+  long?: boolean;
+  variant?: "heading" | "body";
+}) {
+  const textClass = long
+    ? "text-sm leading-7 whitespace-pre-line"
+    : variant === "heading"
+      ? "text-lg font-semibold"
+      : "text-sm font-medium";
+  const maxHeight = long ? "max-h-[500px] overflow-auto" : "";
+
+  if (!showOriginal) {
+    return (
+      <Card>
+        <CardContent className="py-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {label}
+            </p>
+            <Badge variant="outline" className="text-[10px]">
+              {locale.toUpperCase()}
+            </Badge>
+          </div>
+          <div className={`${textClass} ${maxHeight} text-foreground/80`}>
+            {paraphrasedValue}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* Original */}
+      <Card className="border-dashed bg-muted/30">
+        <CardContent className="py-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {label} (Original)
+            </p>
+            <Badge variant="secondary" className="text-[10px]">
+              RAW
+            </Badge>
+          </div>
+          <div
+            className={`${textClass} ${maxHeight} text-muted-foreground`}
+          >
+            {originalValue || "—"}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Paraphrased */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {label} (Paraphrased)
+            </p>
+            <Badge variant="outline" className="text-[10px]">
+              {locale.toUpperCase()}
+            </Badge>
+          </div>
+          <div className={`${textClass} ${maxHeight} text-foreground/80`}>
+            {paraphrasedValue}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function cleanText(text: string): string {
   return text
     .replace(/&amp;/g, "&")
-    .replace(/&#\d+;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&nbsp;/g, " ")
     .replace(/<[^>]+>/g, "")
     .replace(/\t/g, "")

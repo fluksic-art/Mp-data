@@ -63,17 +63,11 @@ export async function runCrawler(opts: CrawlerOptions): Promise<CrawlResult> {
     }
 
     // From any non-sitemap page, follow links to listings
-    // Property details get higher priority (0) than indexes (1)
     await enqueueLinks({
       strategy: "same-domain",
       transformRequestFunction: (req) => {
         const type = classifyUrl(req.url);
-        if (type === "property_detail") {
-          req.priority = 0;
-          return req;
-        }
-        if (type === "listing_index") {
-          req.priority = 1;
+        if (type === "property_detail" || type === "listing_index") {
           return req;
         }
         return false;
