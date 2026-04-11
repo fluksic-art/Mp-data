@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <main className="flex flex-1 items-center justify-center">
@@ -6,12 +8,12 @@ export default function HomePage() {
         <p className="mt-2 text-lg text-gray-600">
           Real estate marketplace — Riviera Maya
         </p>
-        <a
+        <Link
           href="/admin"
           className="mt-6 inline-block rounded-md bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
         >
           Admin Panel
-        </a>
+        </Link>
       </div>
     </main>
   );

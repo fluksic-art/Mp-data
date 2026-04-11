@@ -157,18 +157,38 @@ export async function extractTier3(
       title: String(extracted["title"] ?? ""),
       propertyType: extracted["propertyType"] as ExtractedProperty["propertyType"],
       listingType: extracted["listingType"] as ExtractedProperty["listingType"],
-      priceCents: extracted["priceCents"] as number | null,
+      priceCents: toNumberOrNull(extracted["priceCents"]),
       currency: (extracted["currency"] as ExtractedProperty["currency"]) ?? "MXN",
-      bedrooms: extracted["bedrooms"] as number | null,
-      bathrooms: extracted["bathrooms"] as number | null,
-      constructionM2: extracted["constructionM2"] as number | null,
-      landM2: extracted["landM2"] as number | null,
-      parkingSpaces: extracted["parkingSpaces"] as number | null,
+      bedrooms: toNumberOrNull(extracted["bedrooms"]),
+      bathrooms: toNumberOrNull(extracted["bathrooms"]),
+      constructionM2: toNumberOrNull(extracted["constructionM2"]),
+      landM2: toNumberOrNull(extracted["landM2"]),
+      parkingSpaces: toNumberOrNull(extracted["parkingSpaces"]),
       state: String(extracted["state"] ?? ""),
       city: String(extracted["city"] ?? ""),
-      neighborhood: (extracted["neighborhood"] as string) ?? null,
-      address: (extracted["address"] as string) ?? null,
+      neighborhood: toStringOrNull(extracted["neighborhood"]),
+      address: toStringOrNull(extracted["address"]),
+      // Preserve cleaned text for paraphrase worker (P5 — already cleaned)
+      rawData: {
+        description: cleanText,
+        extractionTier: 3,
+      },
     },
     usage: { inputTokens, outputTokens, costUsd },
   };
+}
+
+/** Coerce LLM tool output to number | null.
+ * Claude sometimes returns string "null" instead of JSON null.
+ */
+function toNumberOrNull(value: unknown): number | null {
+  if (value == null || value === "null" || value === "") return null;
+  const num = typeof value === "number" ? value : Number(value);
+  return isNaN(num) ? null : num;
+}
+
+/** Coerce LLM tool output to string | null. */
+function toStringOrNull(value: unknown): string | null {
+  if (value == null || value === "null" || value === "") return null;
+  return String(value);
 }
