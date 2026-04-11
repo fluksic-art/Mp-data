@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedProperty } from "@mpgenesis/shared";
-import { createLogger } from "@mpgenesis/shared";
+import { createLogger, isSlugAdjectiveKey } from "@mpgenesis/shared";
 import { extractStructuredText } from "./html-cleaner.js";
 import { extractImagesFromHtml } from "./image-extractor.js";
 
@@ -130,6 +130,36 @@ export async function extractTier3(
               nullable: true,
               description: "Street address",
             },
+            developerName: {
+              type: "string",
+              nullable: true,
+              description:
+                "Company name of the developer, builder or real estate firm (e.g. 'Plalla Real Estate', 'Grupo Inmobiliario X'). Null if not found in the source.",
+            },
+            developmentName: {
+              type: "string",
+              nullable: true,
+              description:
+                "Name of the specific development, project or building complex (e.g. 'Lumma Habitat', 'Mayakana Residences', 'Aldea Zama'). Null if this is an individual listing without a project name.",
+            },
+            slugAdjective: {
+              type: "string",
+              enum: [
+                "frente-al-mar",
+                "vista-al-mar",
+                "con-alberca",
+                "con-rooftop",
+                "privado",
+                "amueblado",
+                "de-lujo",
+                "boutique",
+                "penthouse",
+                "familiar",
+              ],
+              nullable: true,
+              description:
+                "The SINGLE most distinctive feature of the property. Pick EXACTLY one value from the enum, or null if none applies clearly. Do not invent new values. 'frente-al-mar' = direct beachfront, 'vista-al-mar' = sea view (not beachfront), 'con-alberca' = pool is the highlight, 'con-rooftop' = rooftop is the highlight, 'privado' = private/gated community, 'amueblado' = furnished, 'de-lujo' = luxury tier, 'boutique' = small curated development, 'penthouse' = top-floor unit, 'familiar' = family-oriented layout.",
+            },
           },
           required: ["title", "propertyType", "listingType", "state", "city"],
         },
@@ -173,6 +203,11 @@ export async function extractTier3(
       city: String(extracted["city"] ?? ""),
       neighborhood: toStringOrNull(extracted["neighborhood"]),
       address: toStringOrNull(extracted["address"]),
+      developerName: toStringOrNull(extracted["developerName"]),
+      developmentName: toStringOrNull(extracted["developmentName"]),
+      slugAdjective: isSlugAdjectiveKey(extracted["slugAdjective"])
+        ? extracted["slugAdjective"]
+        : null,
       // Preserve cleaned text for paraphrase worker (P5 — already cleaned)
       // and images for the public site / admin gallery
       rawData: {

@@ -4,3 +4,4 @@ export * from "./crawl-run.js";
 export * from "./property.js";
 export * from "./property-image.js";
 export * from "./lead.js";
+export * from "./structured-content.js";

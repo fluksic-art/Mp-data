@@ -1,19 +1,32 @@
-import { Job } from "bullmq";
+import { Job, Queue } from "bullmq";
 import {
   BaseWorker,
   QUEUE_NAMES,
   type ExtractJobData,
+  type ParaphraseJobData,
   createLogger,
+  getRedisConnection,
 } from "@mpgenesis/shared";
 import { createDb, properties } from "@mpgenesis/database";
 import { extractProperty } from "@mpgenesis/extraction";
 import { createHash } from "node:crypto";
+import { eq, and } from "drizzle-orm";
 
 const logger = createLogger("extract-worker");
 
 export class ExtractWorker extends BaseWorker<"extract"> {
+  private paraphraseQueue: Queue<ParaphraseJobData>;
+
   constructor() {
     super(QUEUE_NAMES.EXTRACT);
+    this.paraphraseQueue = new Queue(QUEUE_NAMES.PARAPHRASE, {
+      connection: getRedisConnection(),
+    });
+  }
+
+  async close() {
+    await this.paraphraseQueue.close();
+    await super.close();
   }
 
   protected async process(job: Job<ExtractJobData>): Promise<void> {
@@ -72,6 +85,9 @@ export class ExtractWorker extends BaseWorker<"extract"> {
         constructionM2: data.constructionM2 ?? null,
         landM2: data.landM2 ?? null,
         parkingSpaces: data.parkingSpaces ?? null,
+        developerName: data.developerName ?? null,
+        developmentName: data.developmentName ?? null,
+        slugAdjective: data.slugAdjective ?? null,
         country: "MX",
         state: data.state ?? "",
         city: data.city ?? "",
@@ -99,6 +115,9 @@ export class ExtractWorker extends BaseWorker<"extract"> {
           constructionM2: data.constructionM2 ?? null,
           landM2: data.landM2 ?? null,
           parkingSpaces: data.parkingSpaces ?? null,
+          developerName: data.developerName ?? null,
+          developmentName: data.developmentName ?? null,
+          slugAdjective: data.slugAdjective ?? null,
           state: data.state ?? "",
           city: data.city ?? "",
           neighborhood: data.neighborhood ?? null,
@@ -118,7 +137,49 @@ export class ExtractWorker extends BaseWorker<"extract"> {
       { sourceId, crawlRunId, pageUrl, sourceListingId, tier },
       "Property upserted",
     );
+
+    // Auto-enqueue paraphrase job (fixes known issue: extract no longer
+    // requires manual enqueue.ts step). Skip if there's no description text
+    // for the paraphrase worker to chew on.
+    const description = extractDescriptionFromRawData(data.rawData);
+    if (description && description.length >= 50) {
+      const [stored] = await db
+        .select({ id: properties.id })
+        .from(properties)
+        .where(
+          and(
+            eq(properties.sourceId, sourceId),
+            eq(properties.sourceListingId, sourceListingId),
+          ),
+        )
+        .limit(1);
+
+      if (stored) {
+        await this.paraphraseQueue.add(QUEUE_NAMES.PARAPHRASE, {
+          sourceId,
+          crawlRunId,
+          propertyId: stored.id,
+          description,
+        });
+        logger.info(
+          { propertyId: stored.id, sourceListingId },
+          "Paraphrase job enqueued",
+        );
+      }
+    } else {
+      logger.info(
+        { sourceListingId },
+        "Skipping paraphrase enqueue: no usable description",
+      );
+    }
   }
+}
+
+function extractDescriptionFromRawData(rawData: unknown): string | null {
+  if (!rawData || typeof rawData !== "object") return null;
+  const r = rawData as Record<string, unknown>;
+  const desc = r["description"];
+  return typeof desc === "string" && desc.trim().length > 0 ? desc : null;
 }
 
 function generateListingId(url: string): string {

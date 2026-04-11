@@ -4,10 +4,11 @@ import {
   QUEUE_NAMES,
   type TranslateJobData,
   createLogger,
+  isStructuredContent,
 } from "@mpgenesis/shared";
-import { createDb, properties } from "@mpgenesis/database";
+import { createDb, properties, sources } from "@mpgenesis/database";
 import { eq } from "drizzle-orm";
-import { translateProperty } from "./translate.js";
+import { translateStructured } from "./translate.js";
 
 const logger = createLogger("translate-worker");
 
@@ -17,10 +18,9 @@ export class TranslateWorker extends BaseWorker<"translate"> {
   }
 
   protected async process(job: Job<TranslateJobData>): Promise<void> {
-    const { sourceId, crawlRunId, propertyId, textEs, targetLocale } = job.data;
+    const { sourceId, crawlRunId, propertyId, targetLocale } = job.data;
     const db = createDb();
 
-    // Get ES content for full translation
     const [property] = await db
       .select()
       .from(properties)
@@ -32,19 +32,35 @@ export class TranslateWorker extends BaseWorker<"translate"> {
       return;
     }
 
-    const contentEs = property.contentEs as Record<string, string> | null;
-    if (!contentEs) {
-      logger.warn({ propertyId }, "No ES content to translate, skipping");
+    if (!isStructuredContent(property.contentEs)) {
+      logger.warn(
+        { propertyId },
+        "No structured ES content to translate, skipping (run paraphrase first)",
+      );
       return;
     }
 
-    const result = await translateProperty(
-      contentEs["title"] ?? property.title,
-      contentEs["description"] ?? textEs,
-      contentEs["metaTitle"] ?? property.title.slice(0, 60),
-      contentEs["metaDescription"] ?? textEs.slice(0, 160),
-      contentEs["h1"] ?? property.title,
+    // Load source domain and build the prohibited-names list so the
+    // translator also enforces anonimato.
+    const [source] = await db
+      .select({ domain: sources.domain })
+      .from(sources)
+      .where(eq(sources.id, property.sourceId))
+      .limit(1);
+
+    const prohibitedNames: string[] = [];
+    if (property.developerName) prohibitedNames.push(property.developerName);
+    if (property.developmentName) prohibitedNames.push(property.developmentName);
+    if (source?.domain) {
+      prohibitedNames.push(source.domain);
+      const root = source.domain.split(".")[0];
+      if (root && root.length > 3) prohibitedNames.push(root);
+    }
+
+    const result = await translateStructured(
+      property.contentEs,
       targetLocale,
+      prohibitedNames,
     );
 
     // P6: Log costs
@@ -61,21 +77,12 @@ export class TranslateWorker extends BaseWorker<"translate"> {
       "Translation LLM cost",
     );
 
-    // Save translated content
-    const contentField =
-      targetLocale === "en" ? "contentEn" : "contentFr";
-
-    const translatedContent = {
-      title: result.title,
-      description: result.description,
-      metaTitle: result.metaTitle,
-      metaDescription: result.metaDescription,
-      h1: result.h1,
-    };
+    // Save translated structured content
+    const contentField = targetLocale === "en" ? "contentEn" : "contentFr";
 
     await db
       .update(properties)
-      .set({ [contentField]: translatedContent })
+      .set({ [contentField]: result.content })
       .where(eq(properties.id, propertyId));
 
     // If both translations are done, move to review

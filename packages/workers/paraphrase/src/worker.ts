@@ -7,7 +7,7 @@ import {
   createLogger,
   getRedisConnection,
 } from "@mpgenesis/shared";
-import { createDb, properties } from "@mpgenesis/database";
+import { createDb, properties, sources } from "@mpgenesis/database";
 import { eq } from "drizzle-orm";
 import { paraphraseProperty } from "./paraphrase.js";
 
@@ -39,12 +39,28 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
       return;
     }
 
-    const result = await paraphraseProperty(
-      property.title,
-      description,
-      property.city,
-      property.propertyType,
-    );
+    // Load source domain so the paraphrase worker can suppress it from output
+    const [source] = await db
+      .select({ domain: sources.domain })
+      .from(sources)
+      .where(eq(sources.id, property.sourceId))
+      .limit(1);
+
+    const result = await paraphraseProperty({
+      originalTitle: property.title,
+      originalDescription: description,
+      city: property.city,
+      state: property.state,
+      neighborhood: property.neighborhood,
+      propertyType: property.propertyType,
+      listingType: property.listingType,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      constructionM2: property.constructionM2,
+      developerName: property.developerName,
+      developmentName: property.developmentName,
+      sourceDomain: source?.domain ?? null,
+    });
 
     // P6: Log LLM costs
     logger.info(
@@ -59,18 +75,10 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
       "Paraphrase LLM cost",
     );
 
-    // Save paraphrased content (ES)
+    // Save structured content (ES)
     await db
       .update(properties)
-      .set({
-        contentEs: {
-          title: result.title,
-          description: result.description,
-          metaTitle: result.metaTitle,
-          metaDescription: result.metaDescription,
-          h1: result.h1,
-        },
-      })
+      .set({ contentEs: result.content })
       .where(eq(properties.id, propertyId));
 
     // Enqueue translation jobs (ES → EN, ES → FR)
@@ -79,7 +87,7 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
         sourceId,
         crawlRunId,
         propertyId,
-        textEs: result.description,
+        textEs: "", // legacy field — content is read from contentEs JSONB by translate worker
         targetLocale: locale,
       });
     }

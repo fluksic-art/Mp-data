@@ -141,56 +141,107 @@ export function buildListingMeta(
   const title =
     titleWithBrand.length <= 60 ? titleWithBrand : titleBase.slice(0, 60);
 
-  // Description: "{TypeLabel} {bedrooms} rec, {m2} m² en {city}, {state}. ..."
-  // Target: 120-160 chars
-  const descParts: string[] = [typeLabel];
-  if (inputs.bedrooms) {
-    const bedLabel = locale === "es" ? "rec" : locale === "en" ? "bed" : "ch";
-    descParts.push(`${inputs.bedrooms} ${bedLabel}`);
-  }
-  if (inputs.bathrooms) {
-    const bathLabel =
-      locale === "es" ? "baños" : locale === "en" ? "bath" : "sdb";
-    descParts.push(`${inputs.bathrooms} ${bathLabel}`);
-  }
-  if (inputs.constructionM2) {
-    descParts.push(`${inputs.constructionM2} m²`);
-  }
-  descParts.push(`${inputs.city}, ${inputs.state}`);
+  // Description per Propyte Manual Parte 5.4:
+  // [verbo acción] + [tipo+recs] + [ubicación] + [precio] + [CTA]
+  // Price and CTA are SACRED — trim location first, then bedrooms, never CTA/price.
+  // Target: 150-160 chars.
+  const description = buildDescription(locale, typeLabel, inputs, priceStr);
 
+  // H1: typeLabel + city + (bedrooms suffix when present)
   const inWord = locale === "es" ? "en" : locale === "en" ? "in" : "à";
-  let description = `${descParts[0]} ${descParts
-    .slice(1)
-    .join(", ")
-    .replace(`, ${inputs.city}`, ` ${inWord} ${inputs.city}`)}`;
-
-  if (priceStr) {
-    const fromWord =
-      locale === "es" ? "desde" : locale === "en" ? "from" : "à partir de";
-    description += `. ${fromWord} ${priceStr}`;
-  }
-
-  // CTA at the end if there's room
-  const cta =
-    locale === "es"
-      ? "Contacta hoy."
-      : locale === "en"
-        ? "Contact today."
-        : "Contactez-nous.";
-  if (description.length + cta.length + 1 <= 160) {
-    description += ` ${cta}`;
-  }
-
-  description = description.slice(0, 160);
-
-  // H1: typically same as title without brand
-  const h1 = `${typeLabel} ${inWord} ${inputs.city}${
-    inputs.bedrooms
-      ? ` - ${inputs.bedrooms} ${locale === "es" ? "recámaras" : locale === "en" ? "bedrooms" : "chambres"}`
-      : ""
-  }`;
+  const bedSuffix = inputs.bedrooms
+    ? ` - ${inputs.bedrooms} ${
+        locale === "es"
+          ? "recámaras"
+          : locale === "en"
+            ? "bedrooms"
+            : "chambres"
+      }`
+    : "";
+  const h1 = `${typeLabel} ${inWord} ${inputs.city}${bedSuffix}`;
 
   return { title, description, h1 };
+}
+
+/** Per-locale meta description builder.
+ *
+ * Hard contract: price (if available) and CTA always survive trimming.
+ * Truncation order: full → drop state → drop full location → drop bedroom
+ * fragment → final hard slice.
+ */
+function buildDescription(
+  locale: "es" | "en" | "fr",
+  typeLabel: string,
+  inputs: MetaInputs,
+  priceStr: string,
+): string {
+  const lowerType = typeLabel.toLowerCase();
+  const cta =
+    locale === "es"
+      ? "Agenda tu visita."
+      : locale === "en"
+        ? "Schedule a tour."
+        : "Planifiez une visite.";
+  const fromWord =
+    locale === "es" ? "Desde" : locale === "en" ? "From" : "À partir de";
+  const priceFragment = priceStr ? `${fromWord} ${priceStr}.` : "";
+
+  const verb =
+    locale === "es" ? "Descubre" : locale === "en" ? "Discover" : "Découvrez";
+
+  // Per-locale lead variants:
+  // - withBeds: includes bedroom count
+  // - noBeds:   omits bedrooms
+  let withBeds: string;
+  let noBeds: string;
+  if (locale === "es") {
+    const beds = inputs.bedrooms
+      ? ` de ${inputs.bedrooms} ${inputs.bedrooms === 1 ? "recámara" : "recámaras"}`
+      : "";
+    withBeds = `${verb} este ${lowerType}${beds}`;
+    noBeds = `${verb} este ${lowerType}`;
+  } else if (locale === "en") {
+    const bedPrefix = inputs.bedrooms
+      ? `${inputs.bedrooms}-${inputs.bedrooms === 1 ? "bedroom" : "bedroom"} `
+      : "";
+    // "Discover this 3-bedroom apartment for sale" — bedroom prefix sits before
+    // the property type label. Note: "bedroom" stays singular when used as a
+    // compound modifier (e.g. "3-bedroom apartment"), per AP style.
+    withBeds = `${verb} this ${bedPrefix}${lowerType}`;
+    noBeds = `${verb} this ${lowerType}`;
+  } else {
+    const beds = inputs.bedrooms
+      ? ` de ${inputs.bedrooms} ${inputs.bedrooms === 1 ? "chambre" : "chambres"}`
+      : "";
+    withBeds = `${verb} ce ${lowerType}${beds}`;
+    noBeds = `${verb} ce ${lowerType}`;
+  }
+
+  const inWord = locale === "es" ? "en" : locale === "en" ? "in" : "à";
+  const fullLocation = `${inWord} ${inputs.city}, ${inputs.state}`;
+  const shortLocation = `${inWord} ${inputs.city}`;
+
+  const compose = (lead: string, location: string): string => {
+    let s = `${lead} ${location}.`;
+    if (priceFragment) s += ` ${priceFragment}`;
+    s += ` ${cta}`;
+    return s;
+  };
+
+  const candidates = [
+    compose(withBeds, fullLocation),
+    compose(withBeds, shortLocation),
+    compose(noBeds, fullLocation),
+    compose(noBeds, shortLocation),
+    `${noBeds}.${priceFragment ? ` ${priceFragment}` : ""} ${cta}`,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.length <= 160) return candidate;
+  }
+  // Last resort: hard slice the most-trimmed candidate
+  const last = candidates[candidates.length - 1] ?? "";
+  return last.slice(0, 160);
 }
 
 /** Build meta tags for a hub page (city + property type listing) */

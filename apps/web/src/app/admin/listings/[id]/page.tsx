@@ -138,9 +138,9 @@ export default async function ListingDetailPage({
         <div className="lg:col-span-2 space-y-8">
           {/* Multilingual content preview */}
           <ContentPreview
-            contentEs={listing.contentEs as Record<string, string> | null}
-            contentEn={listing.contentEn as Record<string, string> | null}
-            contentFr={listing.contentFr as Record<string, string> | null}
+            contentEs={listing.contentEs}
+            contentEn={listing.contentEn}
+            contentFr={listing.contentFr}
             rawData={rawData}
           />
 
@@ -210,6 +210,29 @@ export default async function ListingDetailPage({
               </CardContent>
             </Card>
           )}
+
+          {/* Internal anonimato metadata — operator-only, never public */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">
+                Anonimato (internal)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <MetaRow
+                label="Developer"
+                value={listing.developerName ?? "—"}
+              />
+              <MetaRow
+                label="Development"
+                value={listing.developmentName ?? "—"}
+              />
+              <MetaRow
+                label="Slug adjective"
+                value={listing.slugAdjective ?? "—"}
+              />
+            </CardContent>
+          </Card>
 
           {/* Metadata */}
           <Card>

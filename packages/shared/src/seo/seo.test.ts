@@ -5,8 +5,21 @@ import {
   buildPropertyJsonLd,
   buildBreadcrumbJsonLd,
   buildHreflangLinks,
+  buildFaqJsonLd,
+  buildListingSlug,
 } from "./json-ld.js";
 import { buildListingMeta, buildHubMeta } from "./meta-templates.js";
+import {
+  detectForbidden,
+  FORBIDDEN_WORDS_ES,
+  FORBIDDEN_WORDS_EN,
+  FORBIDDEN_WORDS_FR,
+} from "./forbidden-words.js";
+import {
+  translateAdjective,
+  isSlugAdjectiveKey,
+  SLUG_ADJECTIVE_KEYS,
+} from "./slug-adjectives.js";
 
 describe("slugify", () => {
   it("strips accents", () => {
@@ -218,7 +231,8 @@ describe("buildListingMeta", () => {
   it("generates English meta", () => {
     const meta = buildListingMeta(inputs, "en");
     expect(meta.title).toContain("Apartment for sale");
-    expect(meta.description).toContain("3 bed");
+    // New format: "Discover this 3-bedroom apartment for sale in ..."
+    expect(meta.description).toContain("3-bedroom");
   });
 
   it("generates French meta", () => {
@@ -232,6 +246,214 @@ describe("buildListingMeta", () => {
       "es",
     );
     expect(meta.title.length).toBeLessThanOrEqual(60);
+  });
+
+  // Manual Parte 5.4: price + CTA must always survive truncation.
+  it("always includes price and CTA in description (ES)", () => {
+    const meta = buildListingMeta(inputs, "es");
+    expect(meta.description).toContain("MXN");
+    expect(meta.description).toContain("Agenda tu visita.");
+    expect(meta.description.length).toBeLessThanOrEqual(160);
+  });
+
+  it("always includes price and CTA in description (EN)", () => {
+    const meta = buildListingMeta(inputs, "en");
+    expect(meta.description).toContain("MXN");
+    expect(meta.description).toContain("Schedule a tour.");
+    expect(meta.description.length).toBeLessThanOrEqual(160);
+  });
+
+  it("always includes price and CTA in description (FR)", () => {
+    const meta = buildListingMeta(inputs, "fr");
+    expect(meta.description).toContain("MXN");
+    expect(meta.description).toContain("Planifiez une visite.");
+    expect(meta.description.length).toBeLessThanOrEqual(160);
+  });
+
+  it("trims state first when description overflows", () => {
+    const longState = {
+      ...inputs,
+      state: "A Very Long State Name For Testing Truncation Logic",
+    };
+    const meta = buildListingMeta(longState, "es");
+    expect(meta.description.length).toBeLessThanOrEqual(160);
+    expect(meta.description).toContain("Agenda tu visita.");
+    expect(meta.description).toContain("MXN");
+  });
+
+  it("includes CTA even without price", () => {
+    const meta = buildListingMeta({ ...inputs, priceCents: null }, "es");
+    expect(meta.description).toContain("Agenda tu visita.");
+    expect(meta.description.length).toBeLessThanOrEqual(160);
+  });
+
+  it("uses singular bedroom in English when bedrooms=1", () => {
+    const meta = buildListingMeta({ ...inputs, bedrooms: 1 }, "en");
+    expect(meta.description).toContain("1-bedroom");
+  });
+});
+
+describe("buildListingSlug", () => {
+  it("builds ES slug with adjective", () => {
+    const slug = buildListingSlug({
+      propertyType: "apartment",
+      city: "Tulum",
+      slugAdjective: "frente-al-mar",
+      idPrefix: "fb64c047",
+      locale: "es",
+    });
+    expect(slug).toBe("departamento-tulum-frente-al-mar-fb64c047");
+  });
+
+  it("builds EN slug with translated adjective", () => {
+    const slug = buildListingSlug({
+      propertyType: "apartment",
+      city: "Tulum",
+      slugAdjective: "frente-al-mar",
+      idPrefix: "fb64c047",
+      locale: "en",
+    });
+    expect(slug).toBe("apartment-tulum-beachfront-fb64c047");
+  });
+
+  it("builds FR slug with translated adjective", () => {
+    const slug = buildListingSlug({
+      propertyType: "house",
+      city: "Playa del Carmen",
+      slugAdjective: "con-alberca",
+      idPrefix: "abc12345",
+      locale: "fr",
+    });
+    expect(slug).toBe("maison-playa-del-carmen-avec-piscine-abc12345");
+  });
+
+  it("omits adjective when null", () => {
+    const slug = buildListingSlug({
+      propertyType: "villa",
+      city: "Bacalar",
+      slugAdjective: null,
+      idPrefix: "xyz00000",
+      locale: "es",
+    });
+    expect(slug).toBe("villa-bacalar-xyz00000");
+  });
+
+  it("never contains developer or development names", () => {
+    // The slug only takes propertyType, city, adjective, idPrefix.
+    // There is no way to leak a proper name through this API.
+    const slug = buildListingSlug({
+      propertyType: "apartment",
+      city: "Tulum",
+      slugAdjective: "penthouse",
+      idPrefix: "fb64c047",
+      locale: "es",
+    });
+    expect(slug).not.toContain("lumma");
+    expect(slug).not.toContain("habitat");
+    expect(slug).not.toContain("mayakana");
+    expect(slug).not.toContain("plalla");
+  });
+});
+
+describe("translateAdjective", () => {
+  it("translates every key across all 3 locales", () => {
+    for (const key of SLUG_ADJECTIVE_KEYS) {
+      expect(translateAdjective(key, "es")).toBeTruthy();
+      expect(translateAdjective(key, "en")).toBeTruthy();
+      expect(translateAdjective(key, "fr")).toBeTruthy();
+    }
+  });
+
+  it("returns null for null input", () => {
+    expect(translateAdjective(null, "es")).toBeNull();
+    expect(translateAdjective(null, "en")).toBeNull();
+    expect(translateAdjective(null, "fr")).toBeNull();
+  });
+});
+
+describe("isSlugAdjectiveKey", () => {
+  it("accepts valid keys", () => {
+    expect(isSlugAdjectiveKey("frente-al-mar")).toBe(true);
+    expect(isSlugAdjectiveKey("penthouse")).toBe(true);
+  });
+
+  it("rejects invalid values", () => {
+    expect(isSlugAdjectiveKey("invalid")).toBe(false);
+    expect(isSlugAdjectiveKey(null)).toBe(false);
+    expect(isSlugAdjectiveKey(123)).toBe(false);
+    expect(isSlugAdjectiveKey(undefined)).toBe(false);
+  });
+});
+
+describe("buildFaqJsonLd", () => {
+  it("generates FAQPage with question/answer pairs", () => {
+    const faqs = [
+      { question: "¿Acepta extranjeros?", answer: "Sí, vía fideicomiso." },
+      { question: "¿Cuántas recámaras tiene?", answer: "Tres recámaras." },
+    ];
+    const ld = buildFaqJsonLd(faqs);
+    expect(ld["@type"]).toBe("FAQPage");
+    const main = ld["mainEntity"] as Array<Record<string, unknown>>;
+    expect(main).toHaveLength(2);
+    expect(main[0]?.["@type"]).toBe("Question");
+    expect(main[0]?.["name"]).toBe("¿Acepta extranjeros?");
+    const answer0 = main[0]?.["acceptedAnswer"] as Record<string, unknown>;
+    expect(answer0["@type"]).toBe("Answer");
+    expect(answer0["text"]).toBe("Sí, vía fideicomiso.");
+  });
+
+  it("handles empty FAQ list", () => {
+    const ld = buildFaqJsonLd([]);
+    expect(ld["mainEntity"]).toEqual([]);
+  });
+});
+
+describe("detectForbidden", () => {
+  it("flags Spanish anti-humo phrases", () => {
+    const text =
+      "Esta es una oportunidad única que no te puedes perder, con rendimiento garantizado.";
+    const found = detectForbidden(text, "es");
+    expect(found).toContain("oportunidad única");
+    expect(found.some((f) => f.includes("garantizado"))).toBe(true);
+  });
+
+  it("matches accent-folded Spanish variants", () => {
+    const text = "una oportunidad unica con potencial ilimitado";
+    const found = detectForbidden(text, "es");
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it("flags English Zillow value-destroying words", () => {
+    const text = "Amazing fixer with unlimited potential. A must see!";
+    const found = detectForbidden(text, "en");
+    expect(found).toContain("amazing");
+    expect(found).toContain("fixer");
+    expect(found).toContain("unlimited potential");
+    expect(found.some((f) => f.includes("must"))).toBe(true);
+  });
+
+  it("flags French anti-humo phrases", () => {
+    const text =
+      "Une opportunité unique à ne pas manquer avec un rendement garanti.";
+    const found = detectForbidden(text, "fr");
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it("returns empty array for clean text", () => {
+    const text = "Departamento de tres recámaras a 10 minutos del centro.";
+    expect(detectForbidden(text, "es")).toEqual([]);
+  });
+
+  it("does not flag substrings inside other words (single-word terms)", () => {
+    // "fixer" should not match "transfixerized" — boundary protection
+    const text = "We use a transfixerized algorithm for processing.";
+    expect(detectForbidden(text, "en")).not.toContain("fixer");
+  });
+
+  it("export lists are non-empty", () => {
+    expect(FORBIDDEN_WORDS_ES.length).toBeGreaterThan(5);
+    expect(FORBIDDEN_WORDS_EN.length).toBeGreaterThan(5);
+    expect(FORBIDDEN_WORDS_FR.length).toBeGreaterThan(3);
   });
 });
 

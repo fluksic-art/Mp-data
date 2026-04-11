@@ -206,6 +206,9 @@ importers:
       '@mpgenesis/shared':
         specifier: workspace:*
         version: link:../../shared
+      '@mpgenesis/translate-worker':
+        specifier: workspace:*
+        version: link:../translate
       bullmq:
         specifier: ^5.52.0
         version: 5.73.1

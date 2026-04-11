@@ -2,7 +2,11 @@ import type { MetadataRoute } from "next";
 import { getDb } from "@/lib/db";
 import { properties } from "@mpgenesis/database";
 import { eq } from "drizzle-orm";
-import { buildListingUrl, slugify } from "@mpgenesis/shared";
+import {
+  buildListingUrl,
+  buildListingSlug,
+  isSlugAdjectiveKey,
+} from "@mpgenesis/shared";
 
 const BASE_URL = process.env["NEXT_PUBLIC_BASE_URL"] ?? "https://example.com";
 const LOCALES = ["es", "en", "fr"] as const;
@@ -14,11 +18,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const published = await db
     .select({
       id: properties.id,
-      title: properties.title,
       state: properties.state,
       city: properties.city,
       propertyType: properties.propertyType,
       listingType: properties.listingType,
+      slugAdjective: properties.slugAdjective,
       publishedAt: properties.publishedAt,
       lastSeenAt: properties.lastSeenAt,
     })
@@ -47,11 +51,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // Property listing pages — one entry per property per locale
-  // with hreflang alternates
+  // with hreflang alternates. Slug is anonymized: no developer/development
+  // name appears in the URL path.
   for (const property of published) {
-    const slug = slugify(`${property.title}-${property.id.slice(0, 8)}`);
+    const slugAdjective = isSlugAdjectiveKey(property.slugAdjective)
+      ? property.slugAdjective
+      : null;
+    const idPrefix = property.id.slice(0, 8);
 
-    // Build URL for each locale
     const localeUrls = Object.fromEntries(
       LOCALES.map((locale) => [
         locale,
@@ -62,12 +69,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           property.city,
           property.propertyType,
           property.listingType,
-          slug,
+          buildListingSlug({
+            propertyType: property.propertyType,
+            city: property.city,
+            slugAdjective,
+            idPrefix,
+            locale,
+          }),
         ),
       ]),
     );
 
-    // Hreflang alternates (es uses es-mx)
     const languages = Object.fromEntries(
       LOCALES.map((locale) => [
         locale === "es" ? "es-mx" : locale,

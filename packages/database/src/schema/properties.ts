@@ -35,6 +35,12 @@ export const properties = pgTable(
     landM2: numeric("land_m2", { mode: "number" }),
     parkingSpaces: smallint("parking_spaces"),
 
+    // Anonymized internal-only metadata — captured for operator use,
+    // NEVER exposed in public prose (suppressed by paraphrase worker).
+    developerName: text("developer_name"),
+    developmentName: text("development_name"),
+    slugAdjective: text("slug_adjective"),
+
     // Location
     country: text().notNull().default("MX"),
     state: text().notNull(),

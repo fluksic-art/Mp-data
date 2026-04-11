@@ -14,6 +14,7 @@
   "dependencies": {
     "@mpgenesis/shared": "workspace:*",
     "@mpgenesis/database": "workspace:*",
+    "@mpgenesis/translate-worker": "workspace:*",
     "@anthropic-ai/sdk": "^0.86.1",
     "bullmq": "^5.52.0",
     "drizzle-orm": "^0.45.2"

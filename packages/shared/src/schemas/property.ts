@@ -33,6 +33,12 @@ export const propertySchema = z.object({
   landM2: z.number().nonnegative().nullable().default(null),
   parkingSpaces: z.number().int().nonnegative().nullable().default(null),
 
+  // Anonymized internal-only metadata — P1 typed columns, never exposed
+  // in public prose. Captured for operator use and slug generation.
+  developerName: z.string().nullable().default(null),
+  developmentName: z.string().nullable().default(null),
+  slugAdjective: z.string().nullable().default(null),
+
   // Location
   country: z.string().default("MX"),
   state: z.string(),
@@ -78,6 +84,9 @@ export const extractedPropertySchema = propertySchema.pick({
   constructionM2: true,
   landM2: true,
   parkingSpaces: true,
+  developerName: true,
+  developmentName: true,
+  slugAdjective: true,
   state: true,
   city: true,
   neighborhood: true,

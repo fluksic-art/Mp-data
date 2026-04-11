@@ -41,7 +41,10 @@ interface JsonLdListing {
   offers?: {
     price?: string | number;
     priceCurrency?: string;
+    offeredBy?: { name?: string; "@type"?: string };
   };
+  brand?: { name?: string } | string;
+  manufacturer?: { name?: string } | string;
   address?: {
     streetAddress?: string;
     addressLocality?: string;
@@ -129,6 +132,11 @@ function mapJsonLdToProperty(
   const priceCents = price ? Math.round(Number(price) * 100) : null;
   const currency = ld.offers?.priceCurrency ?? "MXN";
   const title = decodeHtmlEntities(ld.name ?? "");
+  const developerName =
+    ld.offers?.offeredBy?.name ??
+    extractNameField(ld.brand) ??
+    extractNameField(ld.manufacturer) ??
+    null;
 
   return {
     sourceUrl,
@@ -148,8 +156,24 @@ function mapJsonLdToProperty(
     bedrooms: ld.numberOfBedrooms ?? ld.numberOfRooms ?? null,
     bathrooms:
       ld.numberOfBathroomsTotal ?? ld.numberOfFullBathrooms ?? null,
+    developerName,
+    // developmentName + slugAdjective are left for Tier 3 since they
+    // require LLM reasoning over the full description.
+    developmentName: null,
+    slugAdjective: null,
     rawData: ld as Record<string, unknown>,
   };
+}
+
+/** Extract a `.name` field from a schema.org brand/manufacturer value,
+ * which may be either a string or an object with `{name}`.
+ */
+function extractNameField(
+  value: { name?: string } | string | undefined,
+): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value.name ?? null;
 }
 
 /** Decode common HTML entities in text (for titles from JSON-LD) */
