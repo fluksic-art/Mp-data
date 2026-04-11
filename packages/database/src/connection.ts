@@ -10,9 +10,21 @@ function getConnectionString(): string {
   return url;
 }
 
+// Singleton pattern: reuse the same connection pool across all calls
+// to createDb() within the same process. This prevents "too many
+// connections" errors in workers that process many jobs.
+let cachedDb: ReturnType<typeof drizzle<typeof schema>> | null = null;
+
 export function createDb() {
-  const client = postgres(getConnectionString());
-  return drizzle(client, { schema });
+  if (cachedDb) return cachedDb;
+
+  const client = postgres(getConnectionString(), {
+    max: 5, // Max connections per worker process
+    idle_timeout: 20, // Close idle connections after 20s
+    max_lifetime: 60 * 10, // 10 min max connection lifetime
+  });
+  cachedDb = drizzle(client, { schema });
+  return cachedDb;
 }
 
 export type Db = ReturnType<typeof createDb>;

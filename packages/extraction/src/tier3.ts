@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedProperty } from "@mpgenesis/shared";
 import { createLogger } from "@mpgenesis/shared";
 import { extractStructuredText } from "./html-cleaner.js";
+import { extractImagesFromHtml } from "./image-extractor.js";
 
 const logger = createLogger("extract:tier3");
 
@@ -32,6 +33,10 @@ export async function extractTier3(
     logger.warn({ sourceUrl }, "Tier 3: Text too short after cleaning");
     return null;
   }
+
+  // Extract images from the raw HTML BEFORE sending text to Claude.
+  // This way Tier 3 properties also get galleries.
+  const images = extractImagesFromHtml(html, sourceUrl);
 
   const client = new Anthropic();
 
@@ -169,8 +174,10 @@ export async function extractTier3(
       neighborhood: toStringOrNull(extracted["neighborhood"]),
       address: toStringOrNull(extracted["address"]),
       // Preserve cleaned text for paraphrase worker (P5 — already cleaned)
+      // and images for the public site / admin gallery
       rawData: {
         description: cleanText,
+        image: images,
         extractionTier: 3,
       },
     },
