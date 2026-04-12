@@ -193,7 +193,20 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
 
-  packages/workers/image-processing: {}
+  packages/workers/image-processing:
+    dependencies:
+      '@mpgenesis/database':
+        specifier: workspace:*
+        version: link:../../database
+      '@mpgenesis/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      bullmq:
+        specifier: ^5.52.0
+        version: 5.73.1
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
 
   packages/workers/paraphrase:
     dependencies:

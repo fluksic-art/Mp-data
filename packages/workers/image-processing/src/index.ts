@@ -1,1 +1,1 @@
-export {};
+export { ImageProcessingWorker } from "./worker.js";

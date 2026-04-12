@@ -4,10 +4,11 @@ import {
   QUEUE_NAMES,
   type ExtractJobData,
   type ParaphraseJobData,
+  type ImageProcessingJobData,
   createLogger,
   getRedisConnection,
 } from "@mpgenesis/shared";
-import { createDb, properties } from "@mpgenesis/database";
+import { createDb, properties, propertyImages } from "@mpgenesis/database";
 import { extractProperty } from "@mpgenesis/extraction";
 import { createHash } from "node:crypto";
 import { eq, and } from "drizzle-orm";
@@ -16,15 +17,19 @@ const logger = createLogger("extract-worker");
 
 export class ExtractWorker extends BaseWorker<"extract"> {
   private paraphraseQueue: Queue<ParaphraseJobData>;
+  private imageProcessingQueue: Queue<ImageProcessingJobData>;
 
   constructor() {
     super(QUEUE_NAMES.EXTRACT);
-    this.paraphraseQueue = new Queue(QUEUE_NAMES.PARAPHRASE, {
-      connection: getRedisConnection(),
+    const connection = getRedisConnection();
+    this.paraphraseQueue = new Queue(QUEUE_NAMES.PARAPHRASE, { connection });
+    this.imageProcessingQueue = new Queue(QUEUE_NAMES.IMAGE_PROCESSING, {
+      connection,
     });
   }
 
   async close() {
+    await this.imageProcessingQueue.close();
     await this.paraphraseQueue.close();
     await super.close();
   }
@@ -138,34 +143,88 @@ export class ExtractWorker extends BaseWorker<"extract"> {
       "Property upserted",
     );
 
-    // Auto-enqueue paraphrase job (fixes known issue: extract no longer
-    // requires manual enqueue.ts step). Skip if there's no description text
-    // for the paraphrase worker to chew on.
-    const description = extractDescriptionFromRawData(data.rawData);
-    if (description && description.length >= 50) {
-      const [stored] = await db
-        .select({ id: properties.id })
-        .from(properties)
-        .where(
-          and(
-            eq(properties.sourceId, sourceId),
-            eq(properties.sourceListingId, sourceListingId),
-          ),
-        )
-        .limit(1);
+    // Fetch stored property ID (needed for downstream queues)
+    const [stored] = await db
+      .select({ id: properties.id })
+      .from(properties)
+      .where(
+        and(
+          eq(properties.sourceId, sourceId),
+          eq(properties.sourceListingId, sourceListingId),
+        ),
+      )
+      .limit(1);
 
-      if (stored) {
-        await this.paraphraseQueue.add(QUEUE_NAMES.PARAPHRASE, {
+    if (!stored) return;
+
+    // --- Images: insert into property_images + enqueue upload jobs ---
+    const imageUrls = extractImageUrls(data.rawData);
+    if (imageUrls.length > 0) {
+      // P4: Upsert images with ON CONFLICT on (property_id, position)
+      for (let i = 0; i < imageUrls.length; i++) {
+        await db
+          .insert(propertyImages)
+          .values({
+            propertyId: stored.id,
+            position: i,
+            originalUrl: imageUrls[i]!,
+          })
+          .onConflictDoUpdate({
+            target: [propertyImages.propertyId, propertyImages.position],
+            set: { originalUrl: imageUrls[i]! },
+          });
+      }
+
+      // Check which images already have rawUrl (already uploaded)
+      const existing = await db
+        .select({
+          position: propertyImages.position,
+          rawUrl: propertyImages.rawUrl,
+        })
+        .from(propertyImages)
+        .where(eq(propertyImages.propertyId, stored.id));
+
+      const uploaded = new Set(
+        existing.filter((img) => img.rawUrl != null).map((img) => img.position),
+      );
+
+      let enqueued = 0;
+      for (let i = 0; i < imageUrls.length; i++) {
+        if (uploaded.has(i)) continue;
+        await this.imageProcessingQueue.add(QUEUE_NAMES.IMAGE_PROCESSING, {
           sourceId,
           crawlRunId,
           propertyId: stored.id,
-          description,
+          imageUrl: imageUrls[i]!,
+          position: i,
         });
-        logger.info(
-          { propertyId: stored.id, sourceListingId },
-          "Paraphrase job enqueued",
-        );
+        enqueued++;
       }
+
+      logger.info(
+        {
+          propertyId: stored.id,
+          totalImages: imageUrls.length,
+          enqueued,
+          skipped: imageUrls.length - enqueued,
+        },
+        "Image processing jobs enqueued",
+      );
+    }
+
+    // --- Paraphrase: enqueue if description is long enough ---
+    const description = extractDescriptionFromRawData(data.rawData);
+    if (description && description.length >= 50) {
+      await this.paraphraseQueue.add(QUEUE_NAMES.PARAPHRASE, {
+        sourceId,
+        crawlRunId,
+        propertyId: stored.id,
+        description,
+      });
+      logger.info(
+        { propertyId: stored.id, sourceListingId },
+        "Paraphrase job enqueued",
+      );
     } else {
       logger.info(
         { sourceListingId },
@@ -173,6 +232,16 @@ export class ExtractWorker extends BaseWorker<"extract"> {
       );
     }
   }
+}
+
+/** Extract image URLs from rawData JSONB. */
+function extractImageUrls(rawData: unknown): string[] {
+  if (!rawData || typeof rawData !== "object") return [];
+  const r = rawData as Record<string, unknown>;
+  const img = r["image"];
+  if (Array.isArray(img)) return img.filter((u): u is string => typeof u === "string");
+  if (typeof img === "string") return [img];
+  return [];
 }
 
 function extractDescriptionFromRawData(rawData: unknown): string | null {
