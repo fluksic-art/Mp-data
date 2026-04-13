@@ -25,11 +25,13 @@ export function createDb() {
   if (cachedDb) return cachedDb;
 
   const url = getConnectionString();
+  const isPgBouncer = url.includes("pgbouncer=true") || url.includes(":6543");
   const client = postgres(url, {
     max: 5, // Max connections per worker process
     idle_timeout: 20, // Close idle connections after 20s
     max_lifetime: 60 * 10, // 10 min max connection lifetime
     ssl: isLocalUrl(url) ? false : "require",
+    prepare: !isPgBouncer, // PgBouncer transaction mode doesn't support prepared statements
   });
   cachedDb = drizzle(client, { schema });
   return cachedDb;
