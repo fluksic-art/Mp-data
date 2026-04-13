@@ -8,6 +8,8 @@ import {
   isSlugAdjectiveKey,
 } from "@mpgenesis/shared";
 
+export const dynamic = "force-dynamic";
+
 const BASE_URL = process.env["NEXT_PUBLIC_BASE_URL"] ?? "https://example.com";
 const LOCALES = ["es", "en", "fr"] as const;
 

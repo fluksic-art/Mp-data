@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+import { isAuthenticated, destroySession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Admin — MPgenesis",
@@ -17,11 +20,18 @@ const navItemsDisabled = [
   { label: "Crawl Runs", note: "Phase 3" },
 ];
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const authed = await isAuthenticated();
+
+  // Login page: render without sidebar
+  if (!authed) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-muted/30">
       {/* Sidebar */}
@@ -75,8 +85,13 @@ export default function AdminLayout({
         </nav>
 
         <Separator />
-        <div className="px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3">
           <p className="text-[11px] text-muted-foreground">v0.1.0 · Phase 1</p>
+          <form action={logout}>
+            <Button variant="ghost" size="xs" type="submit">
+              Salir
+            </Button>
+          </form>
         </div>
       </aside>
 
@@ -86,4 +101,10 @@ export default function AdminLayout({
       </main>
     </div>
   );
+}
+
+async function logout() {
+  "use server";
+  await destroySession();
+  redirect("/admin/login");
 }
