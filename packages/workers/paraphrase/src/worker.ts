@@ -59,10 +59,15 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
       .limit(1);
 
     // Extract amenity labels from rawData (goodlers stores IDs, others may store labels)
-    const rawAmenities = (property.rawData as Record<string, unknown>)?.amenities;
+    const raw = property.rawData as Record<string, unknown>;
+    const rawAmenities = raw?.amenities;
     const amenities: string[] = Array.isArray(rawAmenities)
       ? rawAmenities.map((a: unknown) => (typeof a === "string" ? a : "")).filter(Boolean)
       : [];
+
+    // Enrichment text from PDF extraction
+    const brochureText = typeof raw?.brochureText === "string" ? raw.brochureText : undefined;
+    const pricelistText = typeof raw?.pricelistText === "string" ? raw.pricelistText : undefined;
 
     const result = await paraphraseProperty({
       originalTitle: property.title,
@@ -79,6 +84,8 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
       priceCents: property.priceCents,
       currency: property.currency,
       amenities: amenities.length > 0 ? amenities : undefined,
+      brochureText,
+      pricelistText,
       developerName: property.developerName,
       developmentName: property.developmentName,
       sourceDomain: source?.domain ?? null,

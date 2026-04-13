@@ -32,6 +32,8 @@ export interface ParaphraseInputs {
   priceCents?: number | null | undefined;
   currency?: string | null | undefined;
   amenities?: string[] | undefined;
+  brochureText?: string | undefined;
+  pricelistText?: string | undefined;
   // Anonimato: names + source domain the LLM must NEVER mention in output.
   developerName: string | null;
   developmentName: string | null;
@@ -273,6 +275,17 @@ Estos nombres aparecen en el texto fuente pero NO deben aparecer en tu output. R
 `
       : "";
 
+  // Enrichment sections from PDF extraction
+  const brochureSection = inputs.brochureText
+    ? `\nTEXTO EXTRAIDO DEL BROCHURE DEL DESARROLLO (usa esta informacion para enriquecer la descripcion, especialmente el bloque de features/acabados y lifestyle):
+${inputs.brochureText.substring(0, 3000)}`
+    : "";
+
+  const pricelistSection = inputs.pricelistText
+    ? `\nTEXTO EXTRAIDO DE LA LISTA DE PRECIOS (usa los datos de modelos, superficies y precios como contexto, pero NO copies precios especificos que puedan cambiar):
+${inputs.pricelistText.substring(0, 1500)}`
+    : "";
+
   return `Reescribe esta propiedad usando la herramienta write_listing. Manten todos los tokens {{PLACEHOLDER}} intactos.
 ${prohibitedSection}
 CONTEXTO FACTUAL (usalo, no lo inventes):
@@ -282,7 +295,7 @@ TITULO ORIGINAL (contiene nombres prohibidos que debes omitir):
 ${inputs.originalTitle}
 
 TEXTO ORIGINAL (con placeholders factuales):
-${textWithPlaceholders}`;
+${textWithPlaceholders}${brochureSection}${pricelistSection}`;
 }
 
 async function callClaude(
