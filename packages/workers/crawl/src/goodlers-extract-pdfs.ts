@@ -47,7 +47,13 @@ async function extractTextFromPdf(url: string): Promise<string | null> {
       return null;
     }
 
-    return text;
+    // Truncate to 8000 chars max to avoid DB payload issues
+    const truncated = text.length > 8000 ? text.substring(0, 8000) : text;
+    if (text.length > 8000) {
+      logger.info({ url, originalLen: text.length }, "PDF text truncated to 8000 chars");
+    }
+
+    return truncated;
   } catch (err) {
     logger.error({ url, error: String(err) }, "PDF extraction failed");
     return null;
@@ -146,12 +152,16 @@ async function main() {
         ...(pricelistText ? { pricelistText } : {}),
       };
 
-      await db
-        .update(properties)
-        .set({ rawData: updatedRaw })
-        .where(eq(properties.id, listing.id));
-
-      processed++;
+      try {
+        await db
+          .update(properties)
+          .set({ rawData: updatedRaw })
+          .where(eq(properties.id, listing.id));
+        processed++;
+      } catch (err) {
+        logger.warn({ dev: devName, error: String(err).substring(0, 200) }, "DB update failed, skipping");
+        failed++;
+      }
     } else {
       failed++;
     }
