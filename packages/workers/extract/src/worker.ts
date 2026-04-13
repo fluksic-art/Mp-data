@@ -11,7 +11,7 @@ import {
 import { createDb, properties, propertyImages } from "@mpgenesis/database";
 import { extractProperty } from "@mpgenesis/extraction";
 import { createHash } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 
 const logger = createLogger("extract-worker");
 
@@ -143,9 +143,9 @@ export class ExtractWorker extends BaseWorker<"extract"> {
       "Property upserted",
     );
 
-    // Fetch stored property ID (needed for downstream queues)
+    // Fetch stored property ID + pipeline state (needed for downstream queues)
     const [stored] = await db
-      .select({ id: properties.id })
+      .select({ id: properties.id, contentEs: properties.contentEs })
       .from(properties)
       .where(
         and(
@@ -212,9 +212,30 @@ export class ExtractWorker extends BaseWorker<"extract"> {
       );
     }
 
-    // --- Paraphrase: enqueue if description is long enough ---
+    // --- Duplicate detection: check if same development exists in another source ---
+    const isDuplicate = await detectCrossSourceDuplicate(
+      db,
+      sourceId,
+      data.developmentName ?? null,
+      data.title ?? "",
+    );
+
+    if (isDuplicate) {
+      await db
+        .update(properties)
+        .set({ status: "possible_duplicate" })
+        .where(eq(properties.id, stored.id));
+
+      logger.info(
+        { propertyId: stored.id, sourceListingId, developmentName: data.developmentName },
+        "Possible duplicate detected, skipping paraphrase",
+      );
+      return;
+    }
+
+    // --- Paraphrase: enqueue if not already done and description is long enough ---
     const description = extractDescriptionFromRawData(data.rawData);
-    if (description && description.length >= 50) {
+    if (description && description.length >= 50 && !stored.contentEs) {
       await this.paraphraseQueue.add(QUEUE_NAMES.PARAPHRASE, {
         sourceId,
         crawlRunId,
@@ -249,6 +270,52 @@ function extractDescriptionFromRawData(rawData: unknown): string | null {
   const r = rawData as Record<string, unknown>;
   const desc = r["description"];
   return typeof desc === "string" && desc.trim().length > 0 ? desc : null;
+}
+
+/** Normalize a name for cross-source duplicate comparison. */
+function normalizeForDedup(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[^a-z0-9\s]/g, "") // alphanumeric only
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Check if a property with the same development exists in another source. */
+async function detectCrossSourceDuplicate(
+  db: ReturnType<typeof createDb>,
+  currentSourceId: string,
+  developmentName: string | null,
+  title: string,
+): Promise<boolean> {
+  const nameToCheck = developmentName ?? title;
+  if (!nameToCheck || nameToCheck.length < 3) return false;
+
+  const normalized = normalizeForDedup(nameToCheck);
+  if (normalized.length < 3) return false;
+
+  // Fetch developmentName + title from other sources and compare in JS
+  // (avoids needing unaccent extension in Supabase)
+  const candidates = await db
+    .select({
+      developmentName: properties.developmentName,
+      title: properties.title,
+    })
+    .from(properties)
+    .where(ne(properties.sourceId, currentSourceId))
+    .limit(2000);
+
+  for (const c of candidates) {
+    const candidateName = c.developmentName ?? c.title;
+    const candidateNorm = normalizeForDedup(candidateName);
+    if (candidateNorm.includes(normalized) || normalized.includes(candidateNorm)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function generateListingId(url: string): string {

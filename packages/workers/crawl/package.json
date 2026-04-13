@@ -10,6 +10,7 @@
     "test": "vitest run",
     "lint": "eslint src/",
     "crawl": "tsx src/cli.ts",
+    "batch-crawl": "tsx src/batch-crawl.ts",
     "start": "tsx src/start.ts"
   },
   "dependencies": {

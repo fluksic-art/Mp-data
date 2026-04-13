@@ -40,6 +40,19 @@ export class TranslateWorker extends BaseWorker<"translate"> {
       return;
     }
 
+    // Idempotency: skip if already translated for this locale
+    const existing = targetLocale === "en" ? property.contentEn : property.contentFr;
+    if (existing) {
+      logger.info({ propertyId, locale: targetLocale }, "Already translated, skipping");
+      return;
+    }
+
+    // Skip duplicates — require manual approval first
+    if (property.status === "possible_duplicate") {
+      logger.info({ propertyId, locale: targetLocale }, "Possible duplicate, skipping translate");
+      return;
+    }
+
     // Load source domain and build the prohibited-names list so the
     // translator also enforces anonimato.
     const [source] = await db

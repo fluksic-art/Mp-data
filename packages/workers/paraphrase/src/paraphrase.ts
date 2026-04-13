@@ -28,6 +28,10 @@ export interface ParaphraseInputs {
   bedrooms: number | null;
   bathrooms: number | null;
   constructionM2: number | null;
+  landM2?: number | null | undefined;
+  priceCents?: number | null | undefined;
+  currency?: string | null | undefined;
+  amenities?: string[] | undefined;
   // Anonimato: names + source domain the LLM must NEVER mention in output.
   developerName: string | null;
   developmentName: string | null;
@@ -251,6 +255,13 @@ function buildUserMessage(
   if (inputs.bathrooms) facts.push(`BAÑOS: ${inputs.bathrooms}`);
   if (inputs.constructionM2)
     facts.push(`CONSTRUCCION (m2): ${inputs.constructionM2}`);
+  if (inputs.landM2) facts.push(`TERRENO (m2): ${inputs.landM2}`);
+  if (inputs.priceCents && inputs.currency) {
+    const price = (inputs.priceCents / 100).toLocaleString("es-MX");
+    facts.push(`PRECIO DESDE: $${price} ${inputs.currency}`);
+  }
+  if (inputs.amenities && inputs.amenities.length > 0)
+    facts.push(`AMENIDADES: ${inputs.amenities.join(", ")}`);
 
   const prohibited = collectProhibitedNames(inputs);
   const prohibitedSection =

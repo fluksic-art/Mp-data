@@ -37,6 +37,7 @@ export const propertyStatusSchema = z.enum([
   "review",
   "published",
   "archived",
+  "possible_duplicate",
 ]);
 export type PropertyStatus = z.infer<typeof propertyStatusSchema>;
 

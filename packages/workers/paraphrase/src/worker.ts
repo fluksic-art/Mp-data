@@ -39,12 +39,30 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
       return;
     }
 
+    // Idempotency: skip if already paraphrased
+    if (property.contentEs) {
+      logger.info({ propertyId }, "Already paraphrased, skipping");
+      return;
+    }
+
+    // Skip duplicates — require manual approval first
+    if (property.status === "possible_duplicate") {
+      logger.info({ propertyId }, "Possible duplicate, skipping paraphrase");
+      return;
+    }
+
     // Load source domain so the paraphrase worker can suppress it from output
     const [source] = await db
       .select({ domain: sources.domain })
       .from(sources)
       .where(eq(sources.id, property.sourceId))
       .limit(1);
+
+    // Extract amenity labels from rawData (goodlers stores IDs, others may store labels)
+    const rawAmenities = (property.rawData as Record<string, unknown>)?.amenities;
+    const amenities: string[] = Array.isArray(rawAmenities)
+      ? rawAmenities.map((a: unknown) => (typeof a === "string" ? a : "")).filter(Boolean)
+      : [];
 
     const result = await paraphraseProperty({
       originalTitle: property.title,
@@ -57,6 +75,10 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
       bedrooms: property.bedrooms,
       bathrooms: property.bathrooms,
       constructionM2: property.constructionM2,
+      landM2: property.landM2 ? Number(property.landM2) : null,
+      priceCents: property.priceCents,
+      currency: property.currency,
+      amenities: amenities.length > 0 ? amenities : undefined,
       developerName: property.developerName,
       developmentName: property.developmentName,
       sourceDomain: source?.domain ?? null,
@@ -81,15 +103,19 @@ export class ParaphraseWorker extends BaseWorker<"paraphrase"> {
       .set({ contentEs: result.content })
       .where(eq(properties.id, propertyId));
 
-    // Enqueue translation jobs (ES → EN, ES → FR)
+    // Enqueue translation jobs (ES → EN, ES → FR) with dedup jobId
     for (const locale of ["en", "fr"] as const) {
-      await this.translateQueue.add(QUEUE_NAMES.TRANSLATE, {
-        sourceId,
-        crawlRunId,
-        propertyId,
-        textEs: "", // legacy field — content is read from contentEs JSONB by translate worker
-        targetLocale: locale,
-      });
+      await this.translateQueue.add(
+        QUEUE_NAMES.TRANSLATE,
+        {
+          sourceId,
+          crawlRunId,
+          propertyId,
+          textEs: "", // legacy field — content is read from contentEs JSONB by translate worker
+          targetLocale: locale,
+        },
+        { jobId: `translate-${propertyId}-${locale}` },
+      );
     }
 
     logger.info(

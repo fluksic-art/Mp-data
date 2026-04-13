@@ -15,6 +15,10 @@ import {
   createLogger,
 } from "@mpgenesis/shared";
 import { createDb, sources, crawlRuns } from "@mpgenesis/database";
+import { getPlaywrightProxy } from "./proxy-config.js";
+import { blockResources } from "./resource-blocker.js";
+import { randomDelay, randomUserAgent } from "./stealth.js";
+import { classifyUrl } from "./classifier.js";
 
 const logger = createLogger("direct-crawl");
 
@@ -49,8 +53,15 @@ async function main() {
 
   logger.info({ sourceId: source.id, crawlRunId, listingUrl, maxProperties }, "Starting direct crawl");
 
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const proxy = getPlaywrightProxy();
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--disable-blink-features=AutomationControlled"],
+  });
+  const context = await browser.newContext({
+    ...(proxy ? { proxy } : {}),
+    userAgent: randomUserAgent(),
+  });
 
   try {
     // Step 1: Get property URLs from the listing page(s)
@@ -75,9 +86,9 @@ async function main() {
       );
 
       for (const link of links) {
-        // Only same-domain property pages, no whatsapp/social share links
         if (
-          /\/property\//.test(link) &&
+          classifyUrl(link) === "property_detail" &&
+          link.includes(domain) &&
           !/whatsapp|wa\.me|facebook|twitter/i.test(link) &&
           propertyUrls.size < maxProperties
         ) {
@@ -111,8 +122,8 @@ async function main() {
     for (const url of propertyUrls) {
       try {
         const page = await context.newPage();
+        await blockResources(page);
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-        await page.waitForTimeout(1500);
 
         const html = await page.content();
         await page.close();
@@ -127,6 +138,8 @@ async function main() {
           pageUrl: url,
           html,
         });
+
+        await randomDelay();
       } catch (err) {
         logger.error({ url, error: err instanceof Error ? err.message : String(err) }, "Failed to crawl property");
       }

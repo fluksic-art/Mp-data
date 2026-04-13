@@ -2,10 +2,13 @@ import {
   PlaywrightCrawler,
   createPlaywrightRouter,
   type PlaywrightCrawlingContext,
+  ProxyConfiguration,
   Configuration,
 } from "crawlee";
 import { createLogger } from "@mpgenesis/shared";
 import { classifyUrl, isListingRelated } from "./classifier.js";
+import { getProxyUrl } from "./proxy-config.js";
+import { blockResources } from "./resource-blocker.js";
 
 export interface CrawlResult {
   /** Pages crawled with their HTML content, keyed by URL */
@@ -40,6 +43,7 @@ export async function runCrawler(opts: CrawlerOptions): Promise<CrawlResult> {
   // Default handler: classify and route
   router.addDefaultHandler(async (ctx: PlaywrightCrawlingContext) => {
     const { request, page, enqueueLinks, log } = ctx;
+    await blockResources(page);
     const url = request.loadedUrl ?? request.url;
     const pageType = classifyUrl(url);
 
@@ -84,13 +88,21 @@ export async function runCrawler(opts: CrawlerOptions): Promise<CrawlResult> {
   const config = Configuration.getGlobalConfig();
   config.set("persistStorage", false);
 
+  // Proxy setup (optional — gracefully skipped if env vars not set)
+  const proxyUrl = getProxyUrl();
+  const proxyConfiguration = proxyUrl
+    ? new ProxyConfiguration({ proxyUrls: [proxyUrl] })
+    : undefined;
+
   const crawler = new PlaywrightCrawler({
     requestHandler: router,
     maxRequestsPerCrawl: maxPages,
-    maxConcurrency: 3,
+    maxConcurrency: proxyUrl ? 1 : 3,
+    useSessionPool: true,
     requestHandlerTimeoutSecs: 60,
     navigationTimeoutSecs: 30,
     headless: true,
+    ...(proxyConfiguration ? { proxyConfiguration } : {}),
     launchContext: {
       launchOptions: {
         args: ["--disable-blink-features=AutomationControlled"],

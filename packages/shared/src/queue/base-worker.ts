@@ -1,4 +1,4 @@
-import { Worker, Queue, Job } from "bullmq";
+import { Worker, Queue, Job, UnrecoverableError } from "bullmq";
 import type { QueueName } from "./queues.js";
 import type { JobDataMap } from "./job-types.js";
 import { getRedisConnection } from "./connection.js";
@@ -42,10 +42,34 @@ export abstract class BaseWorker<Q extends QueueName> {
         } catch (error) {
           const durationMs = Date.now() - startTime;
 
+          // Don't retry permanent errors (billing, auth, bad request)
+          const statusCode = (error as { status?: number }).status;
+          const isPermanent =
+            statusCode === 400 ||
+            statusCode === 401 ||
+            statusCode === 402 ||
+            statusCode === 403;
+
           this.logger.error(
-            { sourceId, crawlRunId, jobId: job.id, durationMs, status: "failed", error },
-            `Job ${job.id} failed after ${durationMs}ms`,
+            {
+              sourceId,
+              crawlRunId,
+              jobId: job.id,
+              durationMs,
+              status: "failed",
+              permanent: isPermanent,
+              error,
+            },
+            isPermanent
+              ? `Job ${job.id} failed permanently (${statusCode}), will NOT retry`
+              : `Job ${job.id} failed after ${durationMs}ms`,
           );
+
+          if (isPermanent) {
+            throw new UnrecoverableError(
+              `Permanent error ${statusCode}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
 
           throw error;
         }
