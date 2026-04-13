@@ -9,8 +9,8 @@
  * Idempotent: skips listings that already have extracted text.
  * Cost: $0 (no LLM, just HTTP + PDF parsing).
  */
-import * as pdfParseModule from "pdf-parse";
-const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
+// @ts-ignore — pdf-parse v1 has no types
+import pdf from "pdf-parse/lib/pdf-parse.js";
 import { eq, and, sql } from "drizzle-orm";
 import {
   createLogger,
@@ -33,7 +33,7 @@ async function extractTextFromPdf(url: string): Promise<string | null> {
     }
 
     const buffer = Buffer.from(await res.arrayBuffer());
-    const result = await pdfParse(buffer);
+    const result = await pdf(buffer);
 
     // Clean up extracted text
     const text = result.text
