@@ -29,7 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AutoRefresh } from "./auto-refresh";
-import { ListingsToolbar, parseVisibleColumns, type ColumnKey } from "./toolbar";
+import { ListingsToolbar } from "./toolbar";
+import { parseVisibleColumns, type ColumnKey } from "./columns";
 import { DuplicateActions } from "./duplicate-actions";
 
 export const dynamic = "force-dynamic";
