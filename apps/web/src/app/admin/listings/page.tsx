@@ -45,6 +45,21 @@ function str(val: string | string[] | undefined): string | undefined {
 }
 
 export default async function ListingsPage({ searchParams }: Props) {
+  try {
+    return await ListingsPageInner({ searchParams });
+  } catch (e) {
+    return (
+      <div className="py-12">
+        <h2 className="text-xl font-semibold text-destructive mb-2">Error loading listings</h2>
+        <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto whitespace-pre-wrap">
+          {e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e)}
+        </pre>
+      </div>
+    );
+  }
+}
+
+async function ListingsPageInner({ searchParams }: Props) {
   const params = await searchParams;
   const db = getDb();
 
@@ -52,7 +67,7 @@ export default async function ListingsPage({ searchParams }: Props) {
   const page = Math.max(1, Number(params.page) || 1);
   const perPage = PER_PAGE_OPTIONS.includes(Number(params.perPage) as (typeof PER_PAGE_OPTIONS)[number])
     ? (Number(params.perPage) as number)
-    : 100;
+    : 50;
   const status = str(params.status);
   const city = str(params.city);
   const propertyType = str(params.propertyType);
