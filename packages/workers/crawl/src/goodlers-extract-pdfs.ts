@@ -33,7 +33,14 @@ async function extractTextFromPdf(url: string): Promise<string | null> {
     }
 
     const buffer = Buffer.from(await res.arrayBuffer());
-    const result = await pdf(buffer);
+
+    // Timeout the PDF parsing itself — pdf-parse can hang on malformed PDFs
+    const result = await Promise.race([
+      pdf(buffer),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("PDF parse timeout (30s)")), 30000),
+      ),
+    ]);
 
     // Clean up extracted text
     const text = result.text
