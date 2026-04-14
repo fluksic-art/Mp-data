@@ -30,8 +30,10 @@ import {
 } from "@/components/ui/table";
 import { AutoRefresh } from "./auto-refresh";
 import { ListingsToolbar } from "./toolbar";
-import { parseVisibleColumns, type ColumnKey } from "./columns";
+import { parseVisibleColumns, COLUMN_DEFAULT_WIDTHS, type ColumnKey } from "./columns";
 import { DuplicateActions } from "./duplicate-actions";
+import { ResizableColgroup, ResizeHandle } from "./resizable";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -221,7 +223,6 @@ async function ListingsPageInner({ searchParams }: Props) {
   const totalCount = total?.value ?? 0;
   const totalPages = Math.ceil(totalCount / perPage);
 
-  const has = (col: ColumnKey) => visibleColumns.includes(col);
   const colCount = visibleColumns.length;
 
   return (
@@ -259,23 +260,22 @@ async function ListingsPageInner({ searchParams }: Props) {
       />
 
       <Card className="mt-4 overflow-x-auto">
-        <Table>
+        <Table className="table-fixed [&_td]:overflow-hidden [&_td_p]:truncate [&_td_span]:truncate">
+          <ResizableColgroup
+            columnKeys={visibleColumns}
+            defaults={COLUMN_DEFAULT_WIDTHS}
+          />
           <TableHeader>
             <TableRow>
-              {has("title") && <TableHead className="min-w-[200px]">Property</TableHead>}
-              {has("price") && <TableHead>Price</TableHead>}
-              {has("size") && <TableHead>Size</TableHead>}
-              {has("location") && <TableHead>Location</TableHead>}
-              {has("bedrooms") && <TableHead>Beds/Baths</TableHead>}
-              {has("source") && <TableHead>Source</TableHead>}
-              {has("developer") && <TableHead>Developer</TableHead>}
-              {has("development") && <TableHead>Development</TableHead>}
-              {has("neighborhood") && <TableHead>Neighborhood</TableHead>}
-              {has("images") && <TableHead>Imgs</TableHead>}
-              {has("pipeline") && <TableHead>Pipeline</TableHead>}
-              {has("firstSeen") && <TableHead>First Seen</TableHead>}
-              {has("lastSeen") && <TableHead>Last Seen</TableHead>}
-              {has("status") && <TableHead className="text-right">Status</TableHead>}
+              {visibleColumns.map((key) => (
+                <ResizableTh
+                  key={key}
+                  columnKey={key}
+                  align={key === "status" ? "right" : "left"}
+                >
+                  {COLUMN_LABELS[key]}
+                </ResizableTh>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -291,98 +291,7 @@ async function ListingsPageInner({ searchParams }: Props) {
             ) : (
               listings.map((listing) => (
                 <TableRow key={listing.id} className="group">
-                  {has("title") && (
-                    <TableCell>
-                      <Link href={`/admin/listings/${listing.id}`} className="block">
-                        <p className="text-sm font-medium group-hover:text-primary">
-                          {cleanTitle(listing.title)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {listing.propertyType} · {listing.listingType}
-                        </p>
-                      </Link>
-                    </TableCell>
-                  )}
-                  {has("price") && (
-                    <TableCell className="tabular-nums text-sm">
-                      {listing.priceCents
-                        ? formatPrice(listing.priceCents, listing.currency)
-                        : "—"}
-                    </TableCell>
-                  )}
-                  {has("size") && (
-                    <TableCell className="text-sm tabular-nums">
-                      {listing.constructionM2
-                        ? `${listing.constructionM2} m²`
-                        : "—"}
-                      {listing.landM2 ? (
-                        <span className="block text-xs text-muted-foreground">
-                          {listing.landM2} m² land
-                        </span>
-                      ) : null}
-                    </TableCell>
-                  )}
-                  {has("location") && (
-                    <TableCell>
-                      <span className="text-sm">{listing.city}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {listing.state}
-                      </span>
-                    </TableCell>
-                  )}
-                  {has("bedrooms") && (
-                    <TableCell className="text-sm tabular-nums">
-                      {listing.bedrooms ?? "—"} bd / {listing.bathrooms ?? "—"} ba
-                    </TableCell>
-                  )}
-                  {has("source") && (
-                    <TableCell className="text-xs text-muted-foreground">
-                      {listing.sourceDomain ?? "—"}
-                    </TableCell>
-                  )}
-                  {has("developer") && (
-                    <TableCell className="text-sm">
-                      {listing.developerName ?? "—"}
-                    </TableCell>
-                  )}
-                  {has("development") && (
-                    <TableCell className="text-sm">
-                      {listing.developmentName ?? "—"}
-                    </TableCell>
-                  )}
-                  {has("neighborhood") && (
-                    <TableCell className="text-sm">
-                      {listing.neighborhood ?? "—"}
-                    </TableCell>
-                  )}
-                  {has("images") && (
-                    <TableCell className="tabular-nums text-sm">
-                      {listing.imageCount ?? 0}
-                    </TableCell>
-                  )}
-                  {has("pipeline") && (
-                    <TableCell>
-                      <PipelineBadges listing={listing} />
-                    </TableCell>
-                  )}
-                  {has("firstSeen") && (
-                    <TableCell className="text-xs text-muted-foreground tabular-nums">
-                      {formatDate(listing.firstSeenAt)}
-                    </TableCell>
-                  )}
-                  {has("lastSeen") && (
-                    <TableCell className="text-xs text-muted-foreground tabular-nums">
-                      {formatDate(listing.lastSeenAt)}
-                    </TableCell>
-                  )}
-                  {has("status") && (
-                    <TableCell className="text-right">
-                      <StatusBadge status={listing.status} />
-                      {listing.status === "possible_duplicate" && (
-                        <DuplicateActions propertyId={listing.id} />
-                      )}
-                    </TableCell>
-                  )}
+                  {visibleColumns.map((key) => renderCell(key, listing))}
                 </TableRow>
               ))
             )}
@@ -434,6 +343,44 @@ function PaginationLink({
   );
 }
 
+const COLUMN_LABELS: Record<ColumnKey, string> = {
+  title: "Property",
+  price: "Price",
+  size: "Size",
+  location: "Location",
+  bedrooms: "Beds/Baths",
+  source: "Source",
+  developer: "Developer",
+  development: "Development",
+  neighborhood: "Neighborhood",
+  images: "Imgs",
+  pipeline: "Pipeline",
+  firstSeen: "First Seen",
+  lastSeen: "Last Seen",
+  status: "Status",
+};
+
+function ResizableTh({
+  columnKey,
+  align = "left",
+  children,
+}: {
+  columnKey: ColumnKey;
+  align?: "left" | "right";
+  children: React.ReactNode;
+}) {
+  return (
+    <TableHead className={cn("relative", align === "right" && "text-right")}>
+      {children}
+      <ResizeHandle columnKey={columnKey} />
+    </TableHead>
+  );
+}
+
+/** Pipeline stages for a listing. Shows three segments (ES, EN, FR)
+ * plus a text label for the current stage of the processing pipeline:
+ *   extracted → paraphrased → translating → fully translated
+ */
 function PipelineBadges({
   listing,
 }: {
@@ -446,18 +393,179 @@ function PipelineBadges({
   const hasEs = listing.contentEs != null;
   const hasEn = listing.contentEn != null;
   const hasFr = listing.contentFr != null;
+  const done = [hasEs, hasEn, hasFr].filter(Boolean).length;
 
-  if (!hasEs) {
-    return <span className="text-xs text-muted-foreground">extracted</span>;
-  }
+  const label =
+    done === 0
+      ? "extracted"
+      : done === 1
+        ? "paraphrased"
+        : done === 2
+          ? "translating"
+          : "fully translated";
 
   return (
-    <div className="flex flex-wrap gap-1">
-      <Badge variant="outline" className="text-[10px]">ES</Badge>
-      {hasEn && <Badge variant="outline" className="text-[10px]">EN</Badge>}
-      {hasFr && <Badge variant="outline" className="text-[10px]">FR</Badge>}
+    <div className="flex flex-col gap-1">
+      <div className="flex gap-1">
+        <StageDot label="ES" done={hasEs} />
+        <StageDot label="EN" done={hasEn} />
+        <StageDot label="FR" done={hasFr} />
+      </div>
+      <span className="text-[10px] text-muted-foreground leading-none">
+        {label}
+      </span>
     </div>
   );
+}
+
+function StageDot({ label, done }: { label: string; done: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-4 min-w-[26px] items-center justify-center rounded-sm px-1 text-[9px] font-semibold tabular-nums ring-1",
+        done
+          ? "bg-emerald-100 text-emerald-800 ring-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-800"
+          : "bg-muted text-muted-foreground ring-border",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+type ListingRow = {
+  id: string;
+  title: string;
+  propertyType: string;
+  listingType: string;
+  priceCents: number | null;
+  currency: string;
+  city: string;
+  state: string;
+  bedrooms: number | null;
+  bathrooms: string | number | null;
+  constructionM2: number | null;
+  landM2: string | number | null;
+  status: string;
+  sourceDomain: string | null;
+  developerName: string | null;
+  developmentName: string | null;
+  neighborhood: string | null;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+  contentEs: unknown;
+  contentEn: unknown;
+  contentFr: unknown;
+  imageCount: number | null;
+};
+
+function renderCell(key: ColumnKey, listing: ListingRow) {
+  switch (key) {
+    case "title":
+      return (
+        <TableCell key={key}>
+          <Link href={`/admin/listings/${listing.id}`} className="block">
+            <p className="text-sm font-medium group-hover:text-primary">
+              {cleanTitle(listing.title)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {listing.propertyType} · {listing.listingType}
+            </p>
+          </Link>
+        </TableCell>
+      );
+    case "price":
+      return (
+        <TableCell key={key} className="tabular-nums text-sm">
+          {listing.priceCents
+            ? formatPrice(listing.priceCents, listing.currency)
+            : "—"}
+        </TableCell>
+      );
+    case "size":
+      return (
+        <TableCell key={key} className="text-sm tabular-nums">
+          {listing.constructionM2 ? `${listing.constructionM2} m²` : "—"}
+          {listing.landM2 ? (
+            <span className="block text-xs text-muted-foreground">
+              {listing.landM2} m² land
+            </span>
+          ) : null}
+        </TableCell>
+      );
+    case "location":
+      return (
+        <TableCell key={key}>
+          <span className="text-sm">{listing.city}</span>
+          <span className="block text-xs text-muted-foreground">
+            {listing.state}
+          </span>
+        </TableCell>
+      );
+    case "bedrooms":
+      return (
+        <TableCell key={key} className="text-sm tabular-nums">
+          {listing.bedrooms ?? "—"} bd / {listing.bathrooms ?? "—"} ba
+        </TableCell>
+      );
+    case "source":
+      return (
+        <TableCell key={key} className="text-xs text-muted-foreground">
+          {listing.sourceDomain ?? "—"}
+        </TableCell>
+      );
+    case "developer":
+      return (
+        <TableCell key={key} className="text-sm">
+          {listing.developerName ?? "—"}
+        </TableCell>
+      );
+    case "development":
+      return (
+        <TableCell key={key} className="text-sm">
+          {listing.developmentName ?? "—"}
+        </TableCell>
+      );
+    case "neighborhood":
+      return (
+        <TableCell key={key} className="text-sm">
+          {listing.neighborhood ?? "—"}
+        </TableCell>
+      );
+    case "images":
+      return (
+        <TableCell key={key} className="tabular-nums text-sm">
+          {listing.imageCount ?? 0}
+        </TableCell>
+      );
+    case "pipeline":
+      return (
+        <TableCell key={key}>
+          <PipelineBadges listing={listing} />
+        </TableCell>
+      );
+    case "firstSeen":
+      return (
+        <TableCell key={key} className="text-xs text-muted-foreground tabular-nums">
+          {formatDate(listing.firstSeenAt)}
+        </TableCell>
+      );
+    case "lastSeen":
+      return (
+        <TableCell key={key} className="text-xs text-muted-foreground tabular-nums">
+          {formatDate(listing.lastSeenAt)}
+        </TableCell>
+      );
+    case "status":
+      return (
+        <TableCell key={key} className="text-right">
+          <StatusBadge status={listing.status} />
+          {listing.status === "possible_duplicate" && (
+            <DuplicateActions propertyId={listing.id} />
+          )}
+        </TableCell>
+      );
+  }
 }
 
 function cleanTitle(title: string): string {

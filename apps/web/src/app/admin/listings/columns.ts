@@ -17,6 +17,25 @@ export const ALL_COLUMNS = [
 
 export type ColumnKey = (typeof ALL_COLUMNS)[number]["key"];
 
+/** Default column widths in px. Users can override via drag-resize and
+ * the choice persists in localStorage (see resizable.tsx). */
+export const COLUMN_DEFAULT_WIDTHS: Record<ColumnKey, number> = {
+  title: 280,
+  price: 120,
+  size: 110,
+  location: 140,
+  bedrooms: 100,
+  source: 160,
+  developer: 160,
+  development: 160,
+  neighborhood: 140,
+  images: 60,
+  pipeline: 170,
+  status: 120,
+  firstSeen: 110,
+  lastSeen: 110,
+};
+
 const DEFAULT_COLUMNS = ALL_COLUMNS.filter((c) => c.default).map((c) => c.key);
 
 export function parseVisibleColumns(param: string | undefined): ColumnKey[] {
