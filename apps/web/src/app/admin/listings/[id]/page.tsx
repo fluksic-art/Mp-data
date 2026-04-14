@@ -144,6 +144,159 @@ export default async function ListingDetailPage({
             rawData={rawData}
           />
 
+          {/* Enriched PDF content (brochure + pricelist) */}
+          {(typeof rawData["brochureText"] === "string" ||
+            typeof rawData["pricelistText"] === "string" ||
+            Array.isArray(rawData["brochureUrls"]) ||
+            Array.isArray(rawData["pricelistUrls"])) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  Enriched Content (from PDFs)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* Brochure */}
+                {typeof rawData["brochureText"] === "string" &&
+                  (rawData["brochureText"] as string).length > 0 && (
+                    <div className="rounded-lg border bg-muted/30">
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          <Badge variant="secondary">BROCHURE</Badge>
+                          {(rawData["brochureText"] as string).length.toLocaleString()} chars
+                        </span>
+                        {Array.isArray(rawData["brochureUrls"]) &&
+                          (rawData["brochureUrls"] as string[])[0] && (
+                            <a
+                              href={(rawData["brochureUrls"] as string[])[0]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-muted-foreground hover:text-foreground underline"
+                            >
+                              View PDF ↗
+                            </a>
+                          )}
+                      </div>
+                      <details className="group">
+                        <summary className="cursor-pointer border-t px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-accent">
+                          Show extracted text
+                        </summary>
+                        <div className="max-h-[500px] overflow-auto border-t bg-background px-4 py-3 text-sm leading-6 whitespace-pre-line">
+                          {rawData["brochureText"] as string}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+
+                {/* Pricelist */}
+                {typeof rawData["pricelistText"] === "string" &&
+                  (rawData["pricelistText"] as string).length > 0 && (
+                    <div className="rounded-lg border bg-muted/30">
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          <Badge variant="secondary">PRICELIST</Badge>
+                          {(rawData["pricelistText"] as string).length.toLocaleString()} chars
+                        </span>
+                        {Array.isArray(rawData["pricelistUrls"]) &&
+                          (rawData["pricelistUrls"] as string[])[0] && (
+                            <a
+                              href={(rawData["pricelistUrls"] as string[])[0]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-muted-foreground hover:text-foreground underline"
+                            >
+                              View PDF ↗
+                            </a>
+                          )}
+                      </div>
+                      <details className="group">
+                        <summary className="cursor-pointer border-t px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-accent">
+                          Show extracted text
+                        </summary>
+                        <div className="max-h-[500px] overflow-auto border-t bg-background px-4 py-3 font-mono text-xs leading-6 whitespace-pre-line">
+                          {rawData["pricelistText"] as string}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+
+                {/* Pricelist image preview */}
+                {Array.isArray(rawData["pricelistImages"]) &&
+                  (rawData["pricelistImages"] as string[]).length > 0 && (
+                    <details className="group rounded-lg border bg-muted/30">
+                      <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-accent">
+                        <Badge variant="secondary">PRICELIST IMG</Badge>
+                        {(rawData["pricelistImages"] as string[]).length} image(s)
+                      </summary>
+                      <div className="border-t bg-background p-3 space-y-2">
+                        {(rawData["pricelistImages"] as string[]).map((src, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={src}
+                            alt={`Pricelist ${i + 1}`}
+                            className="w-full rounded-md border"
+                          />
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                {/* Plans */}
+                {Array.isArray(rawData["planUrls"]) &&
+                  (rawData["planUrls"] as string[]).length > 0 && (
+                    <details className="group rounded-lg border bg-muted/30">
+                      <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-accent">
+                        <Badge variant="secondary">PLANS</Badge>
+                        {(rawData["planUrls"] as string[]).length} image(s)
+                      </summary>
+                      <div className="border-t bg-background p-3 grid grid-cols-2 gap-2">
+                        {(rawData["planUrls"] as string[]).map((src, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={src}
+                            alt={`Plan ${i + 1}`}
+                            className="w-full rounded-md border"
+                          />
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                {/* Videos + website */}
+                {(Array.isArray(rawData["videoUrls"]) &&
+                  (rawData["videoUrls"] as string[]).length > 0) ||
+                rawData["websiteUrl"] ? (
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {Array.isArray(rawData["videoUrls"]) &&
+                      (rawData["videoUrls"] as string[]).map((url, i) => (
+                        <a
+                          key={i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md border px-3 py-1.5 hover:bg-accent"
+                        >
+                          📹 Video {i + 1}
+                        </a>
+                      ))}
+                    {typeof rawData["websiteUrl"] === "string" && (
+                      <a
+                        href={rawData["websiteUrl"] as string}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-md border px-3 py-1.5 hover:bg-accent"
+                      >
+                        🌐 Developer website
+                      </a>
+                    )}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Gallery */}
           {imageUrls.length > 1 && (
             <div>
