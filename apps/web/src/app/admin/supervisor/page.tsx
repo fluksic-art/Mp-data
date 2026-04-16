@@ -127,36 +127,28 @@ export default async function SupervisorPage({ searchParams }: Props) {
     .orderBy(desc(count()));
 
   // Pre-fetch top 5 affected listings per rule for inline expansion
-  const ruleNames = issuesByRule.map((r) => r.rule);
+  const uniqueRules = [...new Set(issuesByRule.map((r) => r.rule))];
   const listingsByRule = new Map<string, Array<{ id: string; title: string; score: number | null }>>();
-  if (ruleNames.length > 0) {
-    const affected = await db
-      .select({
-        id: properties.id,
-        title: properties.title,
-        score: properties.supervisorScore,
-        rule: sql<string>`i->>'rule'`,
-      })
-      .from(
-        sql`${properties}, jsonb_array_elements(coalesce(${properties.supervisorIssues}, '[]'::jsonb)) as i`,
-      )
-      .where(
-        and(
-          sql`i->>'rule' = ANY(${ruleNames})`,
-          ne(properties.status, "possible_duplicate"),
-        ),
-      )
-      .orderBy(asc(properties.supervisorScore))
-      .limit(ruleNames.length * 5);
-
-    for (const row of affected) {
-      const list = listingsByRule.get(row.rule) ?? [];
-      if (list.length < 5) {
-        list.push({ id: row.id, title: row.title, score: row.score });
-        listingsByRule.set(row.rule, list);
-      }
-    }
-  }
+  await Promise.all(
+    uniqueRules.slice(0, 15).map(async (ruleName) => {
+      const rows = await db
+        .select({
+          id: properties.id,
+          title: properties.title,
+          score: properties.supervisorScore,
+        })
+        .from(properties)
+        .where(
+          and(
+            sql`exists (select 1 from jsonb_array_elements(coalesce(${properties.supervisorIssues}, '[]'::jsonb)) as i where i->>'rule' = ${ruleName})`,
+            ne(properties.status, "possible_duplicate"),
+          ),
+        )
+        .orderBy(asc(properties.supervisorScore))
+        .limit(5);
+      listingsByRule.set(ruleName, rows);
+    }),
+  );
 
   const propertyTypes = await db
     .selectDistinct({ propertyType: properties.propertyType })
