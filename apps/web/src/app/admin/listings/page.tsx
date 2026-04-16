@@ -82,11 +82,16 @@ async function ListingsPageInner({ searchParams }: Props) {
   const minPrice = str(params.minPrice);
   const maxPrice = str(params.maxPrice);
   const bedrooms = str(params.bedrooms);
+  const supervisorRule = str(params.supervisorRule);
   const visibleColumns = parseVisibleColumns(str(params.columns));
 
   // Build WHERE conditions
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(properties.status, status));
+  if (supervisorRule)
+    conditions.push(
+      sql`exists (select 1 from jsonb_array_elements(coalesce(${properties.supervisorIssues}, '[]'::jsonb)) as i where i->>'rule' = ${supervisorRule})`,
+    );
   if (city) conditions.push(eq(properties.city, city));
   if (propertyType) conditions.push(eq(properties.propertyType, propertyType));
   if (listingType) conditions.push(eq(properties.listingType, listingType));
@@ -240,6 +245,27 @@ async function ListingsPageInner({ searchParams }: Props) {
           <AutoRefresh />
         </div>
       </div>
+
+      {supervisorRule && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+          <span className="text-muted-foreground">Supervisor filter:</span>
+          <Badge variant="secondary" className="font-mono text-xs">
+            {supervisorRule}
+          </Badge>
+          <Link
+            href="/admin/listings"
+            className="ml-auto text-xs text-primary underline-offset-2 hover:underline"
+          >
+            Limpiar filtro
+          </Link>
+          <Link
+            href="/admin/supervisor"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+          >
+            ← Volver a Supervisor
+          </Link>
+        </div>
+      )}
 
       <ListingsToolbar
         currentStatus={status}

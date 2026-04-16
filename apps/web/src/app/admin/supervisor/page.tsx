@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { properties, sources } from "@mpgenesis/database";
@@ -125,6 +126,38 @@ export default async function SupervisorPage({ searchParams }: Props) {
     )
     .orderBy(desc(count()));
 
+  // Pre-fetch top 5 affected listings per rule for inline expansion
+  const ruleNames = issuesByRule.map((r) => r.rule);
+  const listingsByRule = new Map<string, Array<{ id: string; title: string; score: number | null }>>();
+  if (ruleNames.length > 0) {
+    const affected = await db
+      .select({
+        id: properties.id,
+        title: properties.title,
+        score: properties.supervisorScore,
+        rule: sql<string>`i->>'rule'`,
+      })
+      .from(
+        sql`${properties}, jsonb_array_elements(coalesce(${properties.supervisorIssues}, '[]'::jsonb)) as i`,
+      )
+      .where(
+        and(
+          sql`i->>'rule' = ANY(${ruleNames})`,
+          ne(properties.status, "possible_duplicate"),
+        ),
+      )
+      .orderBy(asc(properties.supervisorScore))
+      .limit(ruleNames.length * 5);
+
+    for (const row of affected) {
+      const list = listingsByRule.get(row.rule) ?? [];
+      if (list.length < 5) {
+        list.push({ id: row.id, title: row.title, score: row.score });
+        listingsByRule.set(row.rule, list);
+      }
+    }
+  }
+
   const propertyTypes = await db
     .selectDistinct({ propertyType: properties.propertyType })
     .from(properties)
@@ -187,26 +220,55 @@ export default async function SupervisorPage({ searchParams }: Props) {
                   </TableCell>
                 </TableRow>
               ) : (
-                issuesByRule.map((r) => (
-                  <TableRow key={`${r.rule}-${r.severity}`}>
-                    <TableCell className="font-mono text-xs">{r.rule}</TableCell>
-                    <TableCell className="text-xs">{r.category}</TableCell>
-                    <TableCell>
-                      <SeverityBadge severity={r.severity} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {r.occurrences}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link
-                        href={`/admin/supervisor?rule=${encodeURIComponent(r.rule)}`}
-                        className="text-xs text-primary underline-offset-2 hover:underline"
-                      >
-                        Ver listings →
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))
+                issuesByRule.map((r) => {
+                  const affected = listingsByRule.get(r.rule) ?? [];
+                  return (
+                    <React.Fragment key={`${r.rule}-${r.severity}`}>
+                      <TableRow>
+                        <TableCell className="font-mono text-xs">{r.rule}</TableCell>
+                        <TableCell className="text-xs">{r.category}</TableCell>
+                        <TableCell>
+                          <SeverityBadge severity={r.severity} />
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.occurrences}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Link
+                            href={`/admin/listings?supervisorRule=${encodeURIComponent(r.rule)}`}
+                            className="text-xs text-primary underline-offset-2 hover:underline"
+                          >
+                            Ver todos →
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                      {affected.length > 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="bg-muted/30 px-6 py-2">
+                            <details className="group">
+                              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                                Top {affected.length} listings afectados
+                              </summary>
+                              <ul className="mt-2 space-y-1">
+                                {affected.map((l) => (
+                                  <li key={l.id} className="flex items-center gap-2 text-xs">
+                                    <ScorePill score={l.score} />
+                                    <Link
+                                      href={`/admin/listings/${l.id}`}
+                                      className="truncate text-primary underline-offset-2 hover:underline"
+                                    >
+                                      {l.title}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })
               )}
             </TableBody>
           </Table>
