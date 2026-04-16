@@ -9,6 +9,7 @@
  * The full description lives in div.cx-about-text (rich HTML, ~5000 chars).
  */
 import { randomUUID, createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import * as cheerio from "cheerio";
 import { createLogger } from "@mpgenesis/shared";
@@ -50,6 +51,29 @@ function decodeEntities(s: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ");
+}
+
+// mayaocean.com stores description HTML double-escaped inside div.cx-about-text
+// (e.g. literal "&lt;strong&gt;...&lt;/strong&gt;" as text). Decode the escaped
+// tags, re-parse, then flatten to plain text with paragraph breaks so the
+// downstream paraphrase step receives clean prose.
+export function cleanMayaoceanDescription(rawInnerHtml: string): string {
+  if (!rawInnerHtml) return "";
+  const decoded = decodeEntities(rawInnerHtml);
+  const $d = cheerio.load(`<div id="root">${decoded}</div>`);
+  $d("#root br").replaceWith("\n");
+  $d("#root h1, #root h2, #root h3, #root h4, #root h5, #root h6, #root p, #root li, #root div")
+    .each((_, el) => {
+      $d(el).append("\n\n");
+    });
+  return $d("#root")
+    .text()
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function normalizeForDedup(name: string): string {
@@ -146,9 +170,11 @@ async function fetchAndExtract(slug: string): Promise<Extracted | null> {
 
   const primaryImage: string | null = listingLd.image ?? null;
 
-  // Full description: rich HTML from div.cx-about-text
+  // Full description: rich HTML from div.cx-about-text (stored double-escaped
+  // in the source). Flatten to clean plain text with paragraph breaks.
   const aboutHtml = $("div.cx-about-text").first().html() ?? "";
-  const description = aboutHtml.trim() || (listingLd.description ?? "");
+  const cleaned = cleanMayaoceanDescription(aboutHtml);
+  const description = cleaned || decodeEntities(listingLd.description ?? "").trim();
 
   // Gallery: probro.mx images whose filename matches the dev slug stem
   const stemRx = slugToRegex(slug);
@@ -395,7 +421,10 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  logger.error({ error: String(err) }, "Maya Ocean crawl failed");
-  process.exit(1);
-});
+const isMainEntry = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMainEntry) {
+  main().catch((err) => {
+    logger.error({ error: String(err) }, "Maya Ocean crawl failed");
+    process.exit(1);
+  });
+}
