@@ -125,24 +125,34 @@ describe("runFactualRules", () => {
     expect(issues.map((i) => i.rule)).not.toContain("construction-exceeds-land");
   });
 
-  it("flags coords outside QRoo", () => {
+  it("flags coords outside the listing's own state", () => {
+    // CDMX coords but state=Quintana Roo → mismatch
     const issues = runFactualRules(base({ latitude: 19.43, longitude: -99.13 }));
-    expect(issues.map((i) => i.rule)).toContain("coords-outside-qroo");
+    expect(issues.map((i) => i.rule)).toContain("coords-outside-state");
   });
 
-  it("passes coords inside QRoo bbox", () => {
+  it("passes coords inside the listing's own state bbox", () => {
     const issues = runFactualRules(base({ latitude: 20.62, longitude: -87.08 }));
-    expect(issues.map((i) => i.rule)).not.toContain("coords-outside-qroo");
+    expect(issues.map((i) => i.rule)).not.toContain("coords-outside-state");
+  });
+
+  it("validates coords against any known state", () => {
+    // Jalisco listing with Jalisco coords → ok
+    const ok = runFactualRules(base({ state: "Jalisco", latitude: 20.67, longitude: -103.35 }));
+    expect(ok.map((i) => i.rule)).not.toContain("coords-outside-state");
+    // Jalisco listing with QRoo coords → error
+    const bad = runFactualRules(base({ state: "Jalisco", latitude: 20.62, longitude: -87.08 }));
+    expect(bad.map((i) => i.rule)).toContain("coords-outside-state");
+  });
+
+  it("flags missing state", () => {
+    const issues = runFactualRules(base({ state: "" }));
+    expect(issues.map((i) => i.rule)).toContain("state-missing");
   });
 
   it("flags missing city", () => {
     const issues = runFactualRules(base({ city: "" }));
     expect(issues.map((i) => i.rule)).toContain("city-missing");
-  });
-
-  it("flags state != Quintana Roo as warning", () => {
-    const issues = runFactualRules(base({ state: "CDMX" }));
-    expect(issues.map((i) => i.rule)).toContain("state-not-qroo");
   });
 
   it("flags invalid currency", () => {

@@ -13,14 +13,41 @@ const BEDROOMS_REQUIRED_TYPES = new Set([
   "penthouse",
 ]);
 
-/** Quintana Roo bounding box (approx). Tight enough to catch typos and
- * source-swapped coords, loose enough to not flag legitimate inland
- * listings in Bacalar/FCP. */
-const QROO_BBOX = {
-  minLat: 17.5,
-  maxLat: 21.7,
-  minLng: -89.5,
-  maxLng: -86.5,
+interface Bbox { minLat: number; maxLat: number; minLng: number; maxLng: number }
+
+const STATE_BBOXES: Record<string, Bbox> = {
+  "quintana roo":       { minLat: 17.5,  maxLat: 21.7,  minLng: -89.5,  maxLng: -86.5  },
+  "yucatan":            { minLat: 19.5,  maxLat: 21.7,  minLng: -91.0,  maxLng: -87.4  },
+  "campeche":           { minLat: 17.8,  maxLat: 20.9,  minLng: -92.5,  maxLng: -89.0  },
+  "jalisco":            { minLat: 18.9,  maxLat: 22.8,  minLng: -105.7, maxLng: -101.5 },
+  "nayarit":            { minLat: 20.6,  maxLat: 23.1,  minLng: -105.8, maxLng: -103.7 },
+  "baja california sur": { minLat: 22.8, maxLat: 28.1,  minLng: -115.1, maxLng: -109.2 },
+  "baja california":    { minLat: 28.0,  maxLat: 32.8,  minLng: -117.2, maxLng: -112.7 },
+  "nuevo leon":         { minLat: 23.1,  maxLat: 27.8,  minLng: -101.2, maxLng: -98.4  },
+  "ciudad de mexico":   { minLat: 19.1,  maxLat: 19.6,  minLng: -99.4,  maxLng: -98.9  },
+  "estado de mexico":   { minLat: 18.3,  maxLat: 20.3,  minLng: -100.6, maxLng: -98.5  },
+  "guerrero":           { minLat: 16.3,  maxLat: 18.9,  minLng: -102.2, maxLng: -98.0  },
+  "oaxaca":             { minLat: 15.6,  maxLat: 18.7,  minLng: -98.8,  maxLng: -93.5  },
+  "puebla":             { minLat: 17.8,  maxLat: 20.6,  minLng: -99.1,  maxLng: -96.7  },
+  "queretaro":          { minLat: 20.0,  maxLat: 21.7,  minLng: -100.6, maxLng: -99.0  },
+  "guanajuato":         { minLat: 19.9,  maxLat: 21.9,  minLng: -102.1, maxLng: -99.6  },
+  "veracruz":           { minLat: 17.1,  maxLat: 22.5,  minLng: -98.7,  maxLng: -93.6  },
+  "sinaloa":            { minLat: 22.5,  maxLat: 27.1,  minLng: -109.5, maxLng: -105.4 },
+  "sonora":             { minLat: 26.3,  maxLat: 32.5,  minLng: -115.1, maxLng: -108.4 },
+  "tabasco":            { minLat: 17.2,  maxLat: 18.7,  minLng: -94.1,  maxLng: -90.9  },
+  "colima":             { minLat: 18.6,  maxLat: 19.6,  minLng: -104.7, maxLng: -103.4 },
+  "morelos":            { minLat: 18.3,  maxLat: 19.1,  minLng: -99.5,  maxLng: -98.6  },
+  "chiapas":            { minLat: 14.5,  maxLat: 17.6,  minLng: -94.2,  maxLng: -90.4  },
+  "aguascalientes":     { minLat: 21.6,  maxLat: 22.5,  minLng: -103.0, maxLng: -101.8 },
+  "tamaulipas":         { minLat: 22.2,  maxLat: 27.7,  minLng: -100.4, maxLng: -97.1  },
+  "coahuila":           { minLat: 24.5,  maxLat: 29.9,  minLng: -104.0, maxLng: -99.8  },
+  "chihuahua":          { minLat: 25.6,  maxLat: 31.8,  minLng: -109.1, maxLng: -103.3 },
+  "durango":            { minLat: 22.3,  maxLat: 26.9,  minLng: -107.2, maxLng: -103.4 },
+  "san luis potosi":    { minLat: 21.1,  maxLat: 24.5,  minLng: -102.3, maxLng: -98.3  },
+  "michoacan":          { minLat: 17.9,  maxLat: 20.4,  minLng: -103.8, maxLng: -100.0 },
+  "hidalgo":            { minLat: 19.6,  maxLat: 21.4,  minLng: -99.9,  maxLng: -97.9  },
+  "tlaxcala":           { minLat: 19.1,  maxLat: 19.8,  minLng: -98.7,  maxLng: -97.6  },
+  "zacatecas":          { minLat: 21.0,  maxLat: 25.1,  minLng: -104.4, maxLng: -101.2 },
 };
 
 const VALID_CURRENCIES = new Set(["MXN", "USD", "EUR"]);
@@ -121,36 +148,40 @@ export function runFactualRules(
   }
 
   // --- Location ---
-  if (p.latitude !== null && p.longitude !== null) {
-    if (
-      p.latitude < QROO_BBOX.minLat ||
-      p.latitude > QROO_BBOX.maxLat ||
-      p.longitude < QROO_BBOX.minLng ||
-      p.longitude > QROO_BBOX.maxLng
-    ) {
-      issues.push({
-        category: "factual",
-        rule: "coords-outside-qroo",
-        severity: "error",
-        field: "latitude",
-        message: `Coordenadas (${p.latitude}, ${p.longitude}) fuera del bbox de Quintana Roo`,
-        evidence: {
-          latitude: p.latitude,
-          longitude: p.longitude,
-          bbox: QROO_BBOX,
-        },
-      });
-    }
-  }
-  if (p.state && p.state.toLowerCase() !== "quintana roo") {
+  if (!p.state || p.state.trim().length === 0) {
     issues.push({
       category: "factual",
-      rule: "state-not-qroo",
+      rule: "state-missing",
       severity: "warning",
       field: "state",
-      message: `state="${p.state}" (esperado "Quintana Roo" en fase 1-2)`,
-      evidence: { state: p.state },
+      message: "state vacío — no se pueden validar coordenadas sin referencia",
     });
+  }
+  if (p.latitude !== null && p.longitude !== null && p.state) {
+    const stateKey = p.state.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const bbox = STATE_BBOXES[stateKey];
+    if (bbox) {
+      if (
+        p.latitude < bbox.minLat ||
+        p.latitude > bbox.maxLat ||
+        p.longitude < bbox.minLng ||
+        p.longitude > bbox.maxLng
+      ) {
+        issues.push({
+          category: "factual",
+          rule: "coords-outside-state",
+          severity: "error",
+          field: "latitude",
+          message: `Coordenadas (${p.latitude}, ${p.longitude}) fuera del bbox de ${p.state}`,
+          evidence: {
+            latitude: p.latitude,
+            longitude: p.longitude,
+            state: p.state,
+            bbox,
+          },
+        });
+      }
+    }
   }
   if (!p.city || p.city.trim().length === 0) {
     issues.push({
