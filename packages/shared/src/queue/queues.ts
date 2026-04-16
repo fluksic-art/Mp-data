@@ -1,7 +1,7 @@
 /** Queue names for the processing pipeline.
  *
  * Pipeline order:
- * CRAWL → EXTRACT → IMAGE_PROCESSING → PARAPHRASE → TRANSLATE → PUBLISH
+ * CRAWL → EXTRACT → IMAGE_PROCESSING → PARAPHRASE → TRANSLATE → SUPERVISOR → PUBLISH
  */
 export const QUEUE_NAMES = {
   CRAWL: "crawl",
@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
   IMAGE_PROCESSING: "image-processing",
   PARAPHRASE: "paraphrase",
   TRANSLATE: "translate",
+  SUPERVISOR: "supervisor",
   PUBLISH: "publish",
 } as const;
 

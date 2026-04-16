@@ -6,6 +6,7 @@ export type {
   ImageProcessingJobData,
   ParaphraseJobData,
   TranslateJobData,
+  SupervisorJobData,
   PublishJobData,
   JobDataMap,
 } from "./job-types.js";

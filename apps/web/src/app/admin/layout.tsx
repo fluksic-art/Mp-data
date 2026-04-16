@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 const navItems = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/listings", label: "Listings" },
+  { href: "/admin/supervisor", label: "Supervisor" },
 ];
 
 const navItemsDisabled = [

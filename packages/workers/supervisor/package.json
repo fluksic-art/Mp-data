@@ -1,0 +1,23 @@
+{
+  "name": "@mpgenesis/supervisor-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "start": "tsx src/start.ts",
+    "enqueue": "tsx src/enqueue.ts",
+    "cron": "tsx src/cron.ts"
+  },
+  "dependencies": {
+    "@mpgenesis/shared": "workspace:*",
+    "@mpgenesis/database": "workspace:*",
+    "@anthropic-ai/sdk": "^0.86.1",
+    "bullmq": "^5.52.0",
+    "drizzle-orm": "^0.45.2"
+  }
+}

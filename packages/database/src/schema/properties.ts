@@ -64,6 +64,21 @@ export const properties = pgTable(
     status: text().notNull().default("draft"),
     contentHash: text("content_hash").notNull(),
 
+    // Supervisor — written by the supervisor worker (factual + content QA).
+    // `supervisorIssues` is an array of SupervisorIssue (see packages/shared).
+    // `qaStatus` is operator-facing: "ok" | "needs_review" | "blocked".
+    // `supervisorCheckVersion` bumps invalidate prior runs; cron re-evaluates.
+    supervisorScore: smallint("supervisor_score"),
+    supervisorFactualScore: smallint("supervisor_factual_score"),
+    supervisorContentScore: smallint("supervisor_content_score"),
+    supervisorIssues: jsonb("supervisor_issues"),
+    supervisorSummary: text("supervisor_summary"),
+    supervisorCheckedAt: timestamp("supervisor_checked_at", {
+      withTimezone: true,
+    }),
+    supervisorCheckVersion: text("supervisor_check_version"),
+    qaStatus: text("qa_status"),
+
     // Tracking
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
       .notNull()

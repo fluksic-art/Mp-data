@@ -1,9 +1,11 @@
-import { Job } from "bullmq";
+import { Job, Queue } from "bullmq";
 import {
   BaseWorker,
   QUEUE_NAMES,
   type TranslateJobData,
+  type SupervisorJobData,
   createLogger,
+  getRedisConnection,
   isStructuredContent,
 } from "@mpgenesis/shared";
 import { createDb, properties, sources } from "@mpgenesis/database";
@@ -13,8 +15,13 @@ import { translateStructured } from "./translate.js";
 const logger = createLogger("translate-worker");
 
 export class TranslateWorker extends BaseWorker<"translate"> {
+  private supervisorQueue: Queue<SupervisorJobData>;
+
   constructor() {
     super(QUEUE_NAMES.TRANSLATE);
+    this.supervisorQueue = new Queue(QUEUE_NAMES.SUPERVISOR, {
+      connection: getRedisConnection(),
+    });
   }
 
   protected async process(job: Job<TranslateJobData>): Promise<void> {
@@ -115,6 +122,32 @@ export class TranslateWorker extends BaseWorker<"translate"> {
         .where(eq(properties.id, propertyId));
 
       logger.info({ propertyId }, "All translations complete, status → review");
+
+      // Enqueue supervisor — it re-reads the row and finalizes qa_status.
+      // Best-effort: if the queue is down, the listing still lands in
+      // review and the nightly cron will pick it up.
+      try {
+        await this.supervisorQueue.add(
+          QUEUE_NAMES.SUPERVISOR,
+          {
+            sourceId,
+            crawlRunId,
+            propertyId,
+            reason: "post-translate",
+          },
+          { jobId: `supervisor-${propertyId}-post-translate` },
+        );
+      } catch (err) {
+        logger.warn(
+          { propertyId, err },
+          "Failed to enqueue supervisor post-translate — nightly cron will catch it",
+        );
+      }
     }
+  }
+
+  async close() {
+    await this.supervisorQueue.close();
+    await super.close();
   }
 }

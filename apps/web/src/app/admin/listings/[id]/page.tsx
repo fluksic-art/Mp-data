@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { LeadForm, WhatsAppCTA } from "@/components/lead-form";
 import { ContentPreview } from "@/components/content-preview";
+import type { SupervisorIssue } from "@mpgenesis/shared";
+import { SupervisorReport } from "./supervisor-report";
 
 export default async function ListingDetailPage({
   params,
@@ -136,6 +138,21 @@ export default async function ListingDetailPage({
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Content — left 2/3 */}
         <div className="lg:col-span-2 space-y-8">
+          {/* Supervisor report */}
+          <SupervisorReport
+            propertyId={listing.id}
+            supervisorScore={listing.supervisorScore}
+            supervisorFactualScore={listing.supervisorFactualScore}
+            supervisorContentScore={listing.supervisorContentScore}
+            supervisorIssues={
+              (listing.supervisorIssues as SupervisorIssue[] | null) ?? null
+            }
+            supervisorSummary={listing.supervisorSummary}
+            supervisorCheckedAt={listing.supervisorCheckedAt}
+            supervisorCheckVersion={listing.supervisorCheckVersion}
+            qaStatus={listing.qaStatus}
+          />
+
           {/* Multilingual content preview */}
           <ContentPreview
             contentEs={listing.contentEs}

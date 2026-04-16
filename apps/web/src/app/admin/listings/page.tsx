@@ -193,6 +193,9 @@ async function ListingsPageInner({ searchParams }: Props) {
       contentEn: properties.contentEn,
       contentFr: properties.contentFr,
       imageCount: imageCountSq.imageCount,
+      supervisorScore: properties.supervisorScore,
+      supervisorIssues: properties.supervisorIssues,
+      qaStatus: properties.qaStatus,
     })
     .from(properties)
     .leftJoin(sources, eq(properties.sourceId, sources.id))
@@ -355,6 +358,7 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
   neighborhood: "Neighborhood",
   images: "Imgs",
   pipeline: "Pipeline",
+  supervisor: "Supervisor",
   firstSeen: "First Seen",
   lastSeen: "Last Seen",
   status: "Status",
@@ -457,6 +461,9 @@ type ListingRow = {
   contentEn: unknown;
   contentFr: unknown;
   imageCount: number | null;
+  supervisorScore: number | null;
+  supervisorIssues: unknown;
+  qaStatus: string | null;
 };
 
 function renderCell(key: ColumnKey, listing: ListingRow) {
@@ -544,6 +551,12 @@ function renderCell(key: ColumnKey, listing: ListingRow) {
           <PipelineBadges listing={listing} />
         </TableCell>
       );
+    case "supervisor":
+      return (
+        <TableCell key={key}>
+          <SupervisorCell listing={listing} />
+        </TableCell>
+      );
     case "firstSeen":
       return (
         <TableCell key={key} className="text-xs text-muted-foreground tabular-nums">
@@ -588,6 +601,49 @@ function formatDate(date: Date): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function SupervisorCell({ listing }: { listing: ListingRow }) {
+  const { supervisorScore, qaStatus, supervisorIssues } = listing;
+  const issues = Array.isArray(supervisorIssues) ? supervisorIssues : [];
+  if (supervisorScore === null && !qaStatus) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const errorCount = issues.filter(
+    (i: { severity?: string }) => i?.severity === "error",
+  ).length;
+  const warnCount = issues.filter(
+    (i: { severity?: string }) => i?.severity === "warning",
+  ).length;
+  const tone =
+    supervisorScore === null
+      ? "bg-muted text-muted-foreground"
+      : supervisorScore >= 85
+        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+        : supervisorScore >= 70
+          ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+          : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300";
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        className={cn(
+          "inline-flex w-fit items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+          tone,
+        )}
+      >
+        {supervisorScore ?? "—"}
+      </span>
+      {(errorCount > 0 || warnCount > 0) && (
+        <span className="text-[10px] text-muted-foreground">
+          {errorCount > 0 && <span className="text-red-600">{errorCount}e</span>}
+          {errorCount > 0 && warnCount > 0 && " · "}
+          {warnCount > 0 && (
+            <span className="text-amber-600">{warnCount}w</span>
+          )}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {

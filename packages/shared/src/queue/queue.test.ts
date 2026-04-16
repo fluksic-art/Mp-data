@@ -9,11 +9,12 @@ describe("QUEUE_NAMES", () => {
     expect(QUEUE_NAMES.IMAGE_PROCESSING).toBe("image-processing");
     expect(QUEUE_NAMES.PARAPHRASE).toBe("paraphrase");
     expect(QUEUE_NAMES.TRANSLATE).toBe("translate");
+    expect(QUEUE_NAMES.SUPERVISOR).toBe("supervisor");
     expect(QUEUE_NAMES.PUBLISH).toBe("publish");
   });
 
-  it("has 6 pipeline stages", () => {
-    expect(Object.keys(QUEUE_NAMES)).toHaveLength(6);
+  it("has 7 pipeline stages", () => {
+    expect(Object.keys(QUEUE_NAMES)).toHaveLength(7);
   });
 });
 

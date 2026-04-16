@@ -15,6 +15,13 @@
       "when": 1775883590301,
       "tag": "0001_thin_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776348986358,
+      "tag": "0002_swift_spirit",
+      "breakpoints": true
     }
   ]
 }
