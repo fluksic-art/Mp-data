@@ -237,7 +237,7 @@ TypeScript. This is a deliberate constraint driven by P9
 | CMS (ph 3+)        | Payload CMS                                    | Only when operator UI needed        |
 | Frontend           | Next.js 15 App Router + shadcn/ui + Tailwind 4 | NO Redux/Zustand (RSC + URL)        |
 | Blog (ph 1-2)      | MDX files in repo                              | Git push to publish                 |
-| Images             | Cloudflare R2                                  | NO S3/CloudFront                    |
+| Images             | Supabase Storage                               | NO S3/CloudFront/R2 (see P9)        |
 | Maps               | Leaflet + OpenStreetMap                        | NO Google Maps                      |
 | Search             | PostgreSQL FTS (phase 1)                       | NO Typesense until >10K             |
 | SEO                | DataForSEO + IndexNow + Schema.org JSON-LD     | NO hardcoded keywords               |
@@ -355,7 +355,7 @@ in Python. Added `/content` for editorial MDX.
 - Opus para batch (Sonnet basta)
 - Python en el codebase principal (all-TS)
 - Selenium, Puppeteer, o Scrapy (usar Crawlee)
-- S3/CloudFront (usar R2)
+- S3/CloudFront/R2 (usar Supabase Storage — ratificado 2026-04-11)
 - Redux/Zustand (RSC + URL state)
 - CMS en fase 1-2 (Next.js admin + Supabase Auth)
 - Busqueda custom antes de PostgreSQL FTS
@@ -474,7 +474,7 @@ lead capture.
 - Admin: watermark bbox drawing (canvas component)
 - Public frontend MVP (Next.js + shadcn/ui)
 - Lead capture: WhatsApp CTA + contact form -> `leads` table
-- Cloudflare R2 image pipeline
+- Supabase Storage image pipeline
 - Branding: name, domain, logo (Looka), brand guide, theme
 
 **DO NOT build**: DataForSEO, IndexNow, advanced SEO, Typesense,
@@ -548,7 +548,7 @@ If the answer to 1 or 2 is "no", do NOT add it.
 | Crawlee + Playwright   | Medium      | Yes — core value prop                 |
 | BullMQ + Redis         | Low-Medium  | Yes — pipeline orchestration          |
 | Supabase (Postgres)    | Low         | Yes — managed DB                      |
-| Cloudflare R2          | Low         | Yes — zero-egress images              |
+| Supabase Storage       | Low         | Yes — same vendor as DB (P9)          |
 | IOPaint (external)     | Low         | Yes — HTTP call only                  |
 | Pino + Sentry          | Low         | Yes — observability                   |
 
@@ -575,8 +575,9 @@ for this team size.
 
 ### Phase 2 — Content Pipeline (5-20 sites)
 
-Add: Anthropic paraphrase/translate ($50-150), R2 ($3-10),
-GPU spot ($5-20), Looka branding ($65 one-time).
+Add: Anthropic paraphrase/translate ($50-150), Supabase Storage
+(included in Pro up to 100GB), GPU spot ($5-20), Looka branding
+($65 one-time).
 **Total**: ~$150-290/month.
 
 ### Phase 3+ — Scale

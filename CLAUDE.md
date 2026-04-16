@@ -42,7 +42,7 @@ Geografía inicial: Quintana Roo (Riviera Maya). Idiomas: ES (primario), EN, FR.
 | CMS (fase 3+) | Payload CMS (cuando se justifique) |
 | Frontend | Next.js 15 App Router + shadcn/ui + Tailwind v4 |
 | Blog (fase 1-2) | MDX files en el repo |
-| Imágenes | Cloudflare R2 |
+| Imágenes | Supabase Storage |
 | Mapas | Leaflet + OpenStreetMap |
 | Búsqueda | PostgreSQL FTS (fase 1) |
 | SEO | DataForSEO + IndexNow + Schema.org JSON-LD |
@@ -102,7 +102,7 @@ Geografía inicial: Quintana Roo (Riviera Maya). Idiomas: ES (primario), EN, FR.
 - Opus para batch (Sonnet basta)
 - Florence-2 hasta que bbox fija falle en datos reales
 - Selenium, Puppeteer, o Scrapy (usar Crawlee)
-- S3/CloudFront (usar R2)
+- S3/CloudFront/R2 (usar Supabase Storage — ratificado 2026-04-11, menos partes móviles según P9)
 - Redux/Zustand (RSC + URL state)
 - CMS en fase 1-2 (Next.js admin + Supabase Auth)
 - Búsqueda custom antes de PostgreSQL FTS
