@@ -49,6 +49,14 @@ export default async function SupervisorPage({ searchParams }: Props) {
   const conditions: SQL[] = [ne(properties.status, "possible_duplicate")];
   if (propertyType) conditions.push(eq(properties.propertyType, propertyType));
   if (qaStatus) conditions.push(eq(properties.qaStatus, qaStatus));
+  if (rule)
+    conditions.push(
+      sql`exists (select 1 from jsonb_array_elements(coalesce(${properties.supervisorIssues}, '[]'::jsonb)) as i where i->>'rule' = ${rule})`,
+    );
+  if (severity)
+    conditions.push(
+      sql`exists (select 1 from jsonb_array_elements(coalesce(${properties.supervisorIssues}, '[]'::jsonb)) as i where i->>'severity' = ${severity})`,
+    );
   if (onlyIssues)
     conditions.push(
       sql`jsonb_array_length(coalesce(${properties.supervisorIssues}, '[]'::jsonb)) > 0`,
@@ -204,6 +212,20 @@ export default async function SupervisorPage({ searchParams }: Props) {
           </Table>
         </Card>
       </div>
+
+      {(rule || severity) && (
+        <div className="mt-6 flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-3 text-sm">
+          <span className="text-muted-foreground">Filtrando por:</span>
+          {rule && <Badge variant="secondary">rule: {rule}</Badge>}
+          {severity && <Badge variant="secondary">severity: {severity}</Badge>}
+          <Link
+            href="/admin/supervisor"
+            className="ml-auto text-xs text-primary underline-offset-2 hover:underline"
+          >
+            Limpiar filtro
+          </Link>
+        </div>
+      )}
 
       <div className="mt-8">
         <h2 className="mb-3 text-lg font-semibold">Peor puntuados</h2>
