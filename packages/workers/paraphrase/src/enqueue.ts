@@ -8,7 +8,7 @@ import {
   createLogger,
 } from "@mpgenesis/shared";
 import { createDb, properties } from "@mpgenesis/database";
-import { isNull } from "drizzle-orm";
+import { and, isNull, ne } from "drizzle-orm";
 
 const logger = createLogger("paraphrase-enqueue");
 
@@ -24,7 +24,7 @@ async function main() {
       rawData: properties.rawData,
     })
     .from(properties)
-    .where(isNull(properties.contentEs));
+    .where(and(isNull(properties.contentEs), ne(properties.status, "possible_duplicate")));
 
   if (pending.length === 0) {
     logger.info("No properties need paraphrasing");
