@@ -85,7 +85,7 @@ export function CampaignCard({ campaign }: { campaign: CampaignData }) {
           <CampaignActions campaign={c} />
         </div>
 
-        {c.status === "review" && <ReviewTable campaign={c} />}
+        {(c.status === "review" || c.status === "done") && <ReviewTable campaign={c} />}
 
         {c.status === "running" && (
           <div className="mt-3">
