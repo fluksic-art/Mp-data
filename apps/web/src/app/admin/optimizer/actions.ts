@@ -2,7 +2,7 @@
 
 import { getDb } from "@/lib/db";
 import { properties, optimizerCampaigns } from "@mpgenesis/database";
-import { eq, ne, and, sql, asc } from "drizzle-orm";
+import { eq, ne, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   getFixForRule,
@@ -67,100 +67,109 @@ export async function createCampaign(
 export async function runTestBatch(
   campaignId: string,
 ): Promise<{ error?: string }> {
-  const db = getDb();
+  try {
+    const db = getDb();
 
-  const [campaign] = await db
-    .select()
-    .from(optimizerCampaigns)
-    .where(eq(optimizerCampaigns.id, campaignId))
-    .limit(1);
+    const [campaign] = await db
+      .select()
+      .from(optimizerCampaigns)
+      .where(eq(optimizerCampaigns.id, campaignId))
+      .limit(1);
 
-  if (!campaign) return { error: "Campaign not found" };
-  if (campaign.status !== "draft") return { error: `Cannot test in status "${campaign.status}"` };
+    if (!campaign) return { error: "Campaign not found" };
+    if (campaign.status !== "draft") return { error: `Cannot test in status "${campaign.status}"` };
 
-  const testIds = campaign.testIds as string[];
-  if (testIds.length === 0) return { error: "No test IDs" };
+    const testIds = campaign.testIds as string[];
+    if (testIds.length === 0) return { error: "No test IDs" };
 
-  const testProps = await db
-    .select({
-      id: properties.id,
-      supervisorScore: properties.supervisorScore,
-      supervisorIssues: properties.supervisorIssues,
-    })
-    .from(properties)
-    .where(sql`${properties.id} = ANY(${testIds})`);
+    const testProps = await db
+      .select({
+        id: properties.id,
+        supervisorScore: properties.supervisorScore,
+        supervisorIssues: properties.supervisorIssues,
+      })
+      .from(properties)
+      .where(inArray(properties.id, testIds));
 
-  const testBefore = testProps.map((p) => ({
-    propertyId: p.id,
-    score: p.supervisorScore,
-    issues: filterIssuesByRule(p.supervisorIssues, campaign.rule),
-  }));
+    const testBefore = testProps.map((p) => ({
+      propertyId: p.id,
+      score: p.supervisorScore,
+      issues: filterIssuesByRule(p.supervisorIssues, campaign.rule),
+    }));
 
-  await db
-    .update(optimizerCampaigns)
-    .set({
-      status: "testing",
-      testStartedAt: new Date(),
-      testBefore,
-    })
-    .where(eq(optimizerCampaigns.id, campaignId));
+    await db
+      .update(optimizerCampaigns)
+      .set({
+        status: "testing",
+        testStartedAt: new Date(),
+        testBefore,
+      })
+      .where(eq(optimizerCampaigns.id, campaignId));
 
-  for (const propId of testIds) {
-    await executeFixAction(db, campaign.fixAction as FixActionKind, propId, campaign.fixParams);
+    for (const propId of testIds) {
+      await executeFixAction(db, campaign.fixAction as FixActionKind, propId, campaign.fixParams);
+    }
+
+    await enqueueSupervisorForIds(db, testIds);
+
+    revalidatePath("/admin/optimizer");
+    return {};
+  } catch (err) {
+    return { error: `runTestBatch failed: ${err instanceof Error ? err.message : String(err)}` };
   }
-
-  await enqueueSupervisorForIds(db, testIds);
-
-  revalidatePath("/admin/optimizer");
-  return {};
 }
 
 export async function completeTest(
   campaignId: string,
 ): Promise<{ error?: string }> {
-  const db = getDb();
+  try {
+    const db = getDb();
 
-  const [campaign] = await db
-    .select()
-    .from(optimizerCampaigns)
-    .where(eq(optimizerCampaigns.id, campaignId))
-    .limit(1);
+    const [campaign] = await db
+      .select()
+      .from(optimizerCampaigns)
+      .where(eq(optimizerCampaigns.id, campaignId))
+      .limit(1);
 
-  if (!campaign) return { error: "Campaign not found" };
-  if (campaign.status !== "testing") return { error: `Not in testing status` };
+    if (!campaign) return { error: "Campaign not found" };
+    if (campaign.status !== "testing") return { error: `Not in testing status` };
 
-  const testIds = campaign.testIds as string[];
-  const testProps = await db
-    .select({
-      id: properties.id,
-      supervisorScore: properties.supervisorScore,
-      supervisorIssues: properties.supervisorIssues,
-    })
-    .from(properties)
-    .where(sql`${properties.id} = ANY(${testIds})`);
+    const testIds = campaign.testIds as string[];
+    const testProps = await db
+      .select({
+        id: properties.id,
+        supervisorScore: properties.supervisorScore,
+        supervisorIssues: properties.supervisorIssues,
+      })
+      .from(properties)
+      .where(inArray(properties.id, testIds));
 
-  const testAfter = testProps.map((p) => ({
-    propertyId: p.id,
-    score: p.supervisorScore,
-    issues: filterIssuesByRule(p.supervisorIssues, campaign.rule),
-  }));
+    const testAfter = testProps.map((p) => ({
+      propertyId: p.id,
+      score: p.supervisorScore,
+      issues: filterIssuesByRule(p.supervisorIssues, campaign.rule),
+    }));
 
-  await db
-    .update(optimizerCampaigns)
-    .set({
-      status: "review",
-      testDoneAt: new Date(),
-      testAfter,
-    })
-    .where(eq(optimizerCampaigns.id, campaignId));
+    await db
+      .update(optimizerCampaigns)
+      .set({
+        status: "review",
+        testDoneAt: new Date(),
+        testAfter,
+      })
+      .where(eq(optimizerCampaigns.id, campaignId));
 
-  revalidatePath("/admin/optimizer");
-  return {};
+    revalidatePath("/admin/optimizer");
+    return {};
+  } catch (err) {
+    return { error: `completeTest failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 export async function approveAndRollout(
   campaignId: string,
 ): Promise<{ error?: string }> {
+  try {
   const db = getDb();
 
   const [campaign] = await db
@@ -227,6 +236,9 @@ export async function approveAndRollout(
 
   revalidatePath("/admin/optimizer");
   return {};
+  } catch (err) {
+    return { error: `approveAndRollout failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 export async function cancelCampaign(
@@ -385,7 +397,7 @@ async function enqueueSupervisorForIds(
       lastCrawlRunId: properties.lastCrawlRunId,
     })
     .from(properties)
-    .where(sql`${properties.id} = ANY(${ids})`);
+    .where(inArray(properties.id, ids));
 
   for (const p of props) {
     await enqueueSupervisorRecheck({

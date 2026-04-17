@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,16 +122,28 @@ export function CampaignCard({ campaign }: { campaign: CampaignData }) {
 
 function CampaignActions({ campaign }: { campaign: CampaignData }) {
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const act = (fn: () => Promise<unknown>) =>
+  const act = (fn: () => Promise<{ error?: string } | unknown>) =>
     startTransition(async () => {
-      await fn();
+      setError(null);
+      const result = await fn();
+      if (result && typeof result === "object" && "error" in result && result.error) {
+        setError(String(result.error));
+        return;
+      }
       router.refresh();
     });
 
   return (
-    <div className="flex gap-2">
+    <div className="space-y-2">
+      {error && (
+        <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-400">
+          {error}
+        </div>
+      )}
+      <div className="flex gap-2">
       {campaign.status === "draft" && (
         <Button
           size="sm"
@@ -180,6 +192,7 @@ function CampaignActions({ campaign }: { campaign: CampaignData }) {
           Cancelar
         </Button>
       )}
+    </div>
     </div>
   );
 }
