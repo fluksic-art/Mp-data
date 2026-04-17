@@ -5,3 +5,4 @@ export { propertyImages } from "./property-images.js";
 export { leads } from "./leads.js";
 export { propertyChanges } from "./property-changes.js";
 export { amenities, propertyAmenities } from "./amenities.js";
+export { optimizerCampaigns } from "./optimizer-campaigns.js";

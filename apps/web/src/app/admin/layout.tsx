@@ -13,6 +13,7 @@ const navItems = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/listings", label: "Listings" },
   { href: "/admin/supervisor", label: "Supervisor" },
+  { href: "/admin/optimizer", label: "Optimizer" },
 ];
 
 const navItemsDisabled = [

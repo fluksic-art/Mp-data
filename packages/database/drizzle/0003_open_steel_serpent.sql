@@ -1,0 +1,21 @@
+CREATE TABLE "optimizer_campaigns" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"rule" text NOT NULL,
+	"severity" text NOT NULL,
+	"category" text NOT NULL,
+	"fix_action" text NOT NULL,
+	"fix_params" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"total_affected" integer DEFAULT 0 NOT NULL,
+	"test_ids" text[] DEFAULT '{}' NOT NULL,
+	"test_started_at" timestamp with time zone,
+	"test_done_at" timestamp with time zone,
+	"test_before" jsonb,
+	"test_after" jsonb,
+	"approved_at" timestamp with time zone,
+	"rollout_started_at" timestamp with time zone,
+	"rollout_done_at" timestamp with time zone,
+	"rollout_fixed" integer DEFAULT 0 NOT NULL,
+	"rollout_failed" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
