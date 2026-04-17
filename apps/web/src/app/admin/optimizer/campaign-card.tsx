@@ -10,13 +10,26 @@ import {
   runTestBatch,
   completeTest,
   approveAndRollout,
+  verifyResults,
   cancelCampaign,
 } from "./actions";
 
-interface TestSnapshot {
+interface PropertySnapshot {
   propertyId: string;
   score: number | null;
   issues: unknown[];
+  title: string;
+  contentPreview: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  bedrooms: number | null;
+  bathrooms: string | number | null;
+  priceCents: number | null;
+  state: string | null;
+  city: string | null;
+  hasContentEs: boolean;
+  hasContentEn: boolean;
+  hasContentFr: boolean;
 }
 
 interface CampaignData {
@@ -67,7 +80,6 @@ export function CreateCampaignButton({
 
 export function CampaignCard({ campaign }: { campaign: CampaignData }) {
   const c = campaign;
-  const statusColor = STATUS_COLORS[c.status] ?? "outline";
 
   return (
     <Card>
@@ -76,7 +88,7 @@ export function CampaignCard({ campaign }: { campaign: CampaignData }) {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-sm font-semibold">{c.rule}</span>
-              <Badge variant={statusColor as any}>{c.status}</Badge>
+              <StatusBadge status={c.status} />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {c.fixAction} · {c.totalAffected} afectados · {c.testIds.length} en test batch
@@ -85,12 +97,14 @@ export function CampaignCard({ campaign }: { campaign: CampaignData }) {
           <CampaignActions campaign={c} />
         </div>
 
-        {(c.status === "review" || c.status === "done") && <ReviewTable campaign={c} />}
+        {(c.status === "review" || c.status === "done" || c.status === "awaiting_workers") && (
+          <ReviewTable campaign={c} />
+        )}
 
         {c.status === "running" && (
           <div className="mt-3">
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Progreso:</span>
+              <span className="text-muted-foreground">Encolando jobs:</span>
               <span className="font-semibold tabular-nums">
                 {c.rolloutFixed + c.rolloutFailed} / {c.totalAffected - c.testIds.length}
               </span>
@@ -109,15 +123,35 @@ export function CampaignCard({ campaign }: { campaign: CampaignData }) {
           </div>
         )}
 
+        {c.status === "awaiting_workers" && (
+          <div className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+            {c.rolloutFixed} jobs encolados. Esperando que los workers procesen.
+            Usa "Verificar resultados" para comprobar el progreso.
+          </div>
+        )}
+
         {c.status === "done" && (
           <div className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
-            Completado: {c.rolloutFixed} corregidos
-            {c.rolloutFailed > 0 && `, ${c.rolloutFailed} fallidos`}
+            Verificado y completado.
           </div>
         )}
       </CardContent>
     </Card>
   );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { variant: string; label: string }> = {
+    draft: { variant: "outline", label: "draft" },
+    testing: { variant: "secondary", label: "testing" },
+    review: { variant: "secondary", label: "review" },
+    running: { variant: "default", label: "running" },
+    awaiting_workers: { variant: "secondary", label: "esperando workers" },
+    done: { variant: "default", label: "done" },
+    failed: { variant: "destructive", label: "cancelado" },
+  };
+  const m = map[status] ?? { variant: "outline", label: status };
+  return <Badge variant={m.variant as any}>{m.label}</Badge>;
 }
 
 function CampaignActions({ campaign }: { campaign: CampaignData }) {
@@ -144,128 +178,177 @@ function CampaignActions({ campaign }: { campaign: CampaignData }) {
         </div>
       )}
       <div className="flex gap-2">
-      {campaign.status === "draft" && (
-        <Button
-          size="sm"
-          disabled={isPending}
-          onClick={() => act(() => runTestBatch(campaign.id))}
-        >
-          {isPending ? "Ejecutando..." : "Ejecutar test"}
-        </Button>
-      )}
-      {campaign.status === "testing" && (
-        <Button
-          size="sm"
-          disabled={isPending}
-          onClick={() => act(() => completeTest(campaign.id))}
-        >
-          {isPending ? "Cargando..." : "Ver resultados"}
-        </Button>
-      )}
-      {campaign.status === "review" && (
-        <>
-          <Button
-            size="sm"
-            disabled={isPending}
-            onClick={() => act(() => approveAndRollout(campaign.id))}
-          >
-            {isPending ? "Aplicando..." : "Aprobar y aplicar a todos"}
+        {campaign.status === "draft" && (
+          <Button size="sm" disabled={isPending} onClick={() => act(() => runTestBatch(campaign.id))}>
+            {isPending ? "Ejecutando..." : "Ejecutar test"}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={isPending}
-            onClick={() => act(() => cancelCampaign(campaign.id))}
-          >
+        )}
+        {campaign.status === "testing" && (
+          <Button size="sm" disabled={isPending} onClick={() => act(() => completeTest(campaign.id))}>
+            {isPending ? "Cargando..." : "Ver resultados"}
+          </Button>
+        )}
+        {campaign.status === "review" && (
+          <>
+            <Button size="sm" disabled={isPending} onClick={() => act(() => approveAndRollout(campaign.id))}>
+              {isPending ? "Aplicando..." : "Aprobar y aplicar a todos"}
+            </Button>
+            <Button size="sm" variant="outline" disabled={isPending} onClick={() => act(() => cancelCampaign(campaign.id))}>
+              Cancelar
+            </Button>
+          </>
+        )}
+        {campaign.status === "awaiting_workers" && (
+          <Button size="sm" disabled={isPending} onClick={() => act(() => verifyResults(campaign.id))}>
+            {isPending ? "Verificando..." : "Verificar resultados"}
+          </Button>
+        )}
+        {["draft", "testing", "awaiting_workers"].includes(campaign.status) && (
+          <Button size="sm" variant="ghost" disabled={isPending} onClick={() => act(() => cancelCampaign(campaign.id))} className="text-muted-foreground">
             Cancelar
           </Button>
-        </>
-      )}
-      {(campaign.status === "draft" || campaign.status === "testing") && (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={isPending}
-          onClick={() => act(() => cancelCampaign(campaign.id))}
-          className="text-muted-foreground"
-        >
-          Cancelar
-        </Button>
-      )}
-    </div>
+        )}
+      </div>
     </div>
   );
 }
 
 function ReviewTable({ campaign }: { campaign: CampaignData }) {
-  const before = (campaign.testBefore ?? []) as TestSnapshot[];
-  const after = (campaign.testAfter ?? []) as TestSnapshot[];
+  const before = (campaign.testBefore ?? []) as PropertySnapshot[];
+  const after = (campaign.testAfter ?? []) as PropertySnapshot[];
   const afterMap = new Map(after.map((a) => [a.propertyId, a]));
+  const fixAction = campaign.fixAction;
 
   return (
-    <div className="mt-4 overflow-x-auto rounded-md border">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b bg-muted/50">
-            <th className="px-3 py-2 text-left font-medium">Property ID</th>
-            <th className="px-3 py-2 text-right font-medium">Score antes</th>
-            <th className="px-3 py-2 text-right font-medium">Score después</th>
-            <th className="px-3 py-2 text-right font-medium">Issues (regla)</th>
-            <th className="px-3 py-2 text-center font-medium">Resuelto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {before.map((b) => {
-            const a = afterMap.get(b.propertyId);
-            const resolved = a ? a.issues.length === 0 : false;
-            const scoreDelta =
-              a?.score != null && b.score != null ? a.score - b.score : null;
+    <div className="mt-4 space-y-3">
+      {before.map((b) => {
+        const a = afterMap.get(b.propertyId);
+        const resolved = a ? a.issues.length === 0 && b.issues.length > 0 : false;
+        const changed = a ? hasChanges(b, a, fixAction) : false;
 
-            return (
-              <tr key={b.propertyId} className="border-b last:border-0">
-                <td className="px-3 py-2 font-mono">{b.propertyId.slice(0, 8)}...</td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  {b.score ?? "—"}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  {a?.score ?? "—"}
-                  {scoreDelta != null && scoreDelta !== 0 && (
-                    <span
-                      className={`ml-1 ${scoreDelta > 0 ? "text-emerald-600" : "text-red-600"}`}
-                    >
-                      {scoreDelta > 0 ? "+" : ""}
-                      {scoreDelta}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums">
-                  {b.issues.length} → {a?.issues.length ?? "?"}
-                </td>
-                <td className="px-3 py-2 text-center">
-                  {a ? (
-                    resolved ? (
-                      <span className="text-emerald-600 font-semibold">✓</span>
-                    ) : (
-                      <span className="text-red-600">✗</span>
-                    )
+        return (
+          <details key={b.propertyId} className="group rounded-md border">
+            <summary className="flex cursor-pointer items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50">
+              <span className="font-mono text-xs text-muted-foreground">
+                {b.propertyId.slice(0, 8)}
+              </span>
+              <span className="truncate flex-1 text-xs">{b.title}</span>
+              <span className="tabular-nums text-xs">
+                {b.score ?? "—"} → {a?.score ?? "—"}
+              </span>
+              <span className="text-xs">
+                {a ? (
+                  resolved ? (
+                    <span className="font-semibold text-emerald-600">Resuelto</span>
+                  ) : changed ? (
+                    <span className="font-semibold text-amber-600">Cambió</span>
                   ) : (
-                    <span className="text-muted-foreground">pendiente</span>
+                    <span className="text-muted-foreground">Sin cambios</span>
+                  )
+                ) : (
+                  <span className="text-muted-foreground">Pendiente</span>
+                )}
+              </span>
+            </summary>
+
+            <div className="border-t bg-muted/20 px-4 py-3 space-y-2 text-xs">
+              {/* Content diff */}
+              {fixAction === "reprocess_paraphrase" && (
+                <>
+                  <DiffRow label="Contenido ES" before={b.hasContentEs ? "✓" : "✗"} after={a?.hasContentEs ? "✓" : "✗"} />
+                  <DiffRow label="Contenido EN" before={b.hasContentEn ? "✓" : "✗"} after={a?.hasContentEn ? "✓" : "✗"} />
+                  <DiffRow label="Contenido FR" before={b.hasContentFr ? "✓" : "✗"} after={a?.hasContentFr ? "✓" : "✗"} />
+                  {b.metaTitle !== a?.metaTitle && (
+                    <DiffRow label="Meta title" before={b.metaTitle} after={a?.metaTitle} />
                   )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  {b.metaDescription !== a?.metaDescription && (
+                    <DiffRow label="Meta description" before={b.metaDescription} after={a?.metaDescription} />
+                  )}
+                  {b.contentPreview !== a?.contentPreview && (
+                    <DiffBlock label="Descripción" before={b.contentPreview} after={a?.contentPreview} />
+                  )}
+                </>
+              )}
+
+              {fixAction === "retranslate" && (
+                <>
+                  <DiffRow label="Contenido EN" before={b.hasContentEn ? "✓" : "✗"} after={a?.hasContentEn ? "✓" : "✗"} />
+                  <DiffRow label="Contenido FR" before={b.hasContentFr ? "✓" : "✗"} after={a?.hasContentFr ? "✓" : "✗"} />
+                </>
+              )}
+
+              {(fixAction === "re_enrich" || fixAction === "data_patch") && (
+                <>
+                  <DiffRow label="Bedrooms" before={String(b.bedrooms ?? "—")} after={String(a?.bedrooms ?? "—")} />
+                  <DiffRow label="Price" before={b.priceCents ? `$${(b.priceCents / 100).toLocaleString()}` : "—"} after={a?.priceCents ? `$${(a.priceCents / 100).toLocaleString()}` : "—"} />
+                  <DiffRow label="State" before={b.state ?? "—"} after={a?.state ?? "—"} />
+                  <DiffRow label="City" before={b.city ?? "—"} after={a?.city ?? "—"} />
+                </>
+              )}
+
+              {/* Issues */}
+              <div className="pt-1 border-t">
+                <span className="text-muted-foreground">Issues ({campaign.rule}): </span>
+                <span>{b.issues.length} → {a?.issues.length ?? "?"}</span>
+              </div>
+            </div>
+          </details>
+        );
+      })}
     </div>
   );
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: "outline",
-  testing: "secondary",
-  review: "secondary",
-  running: "default",
-  done: "default",
-  failed: "destructive",
-};
+function DiffRow({ label, before, after }: { label: string; before: string | null | undefined; after: string | null | undefined }) {
+  const changed = before !== after;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-28 shrink-0 text-muted-foreground">{label}</span>
+      {changed ? (
+        <>
+          <span className="line-through text-red-600/70">{before ?? "—"}</span>
+          <span className="text-muted-foreground">→</span>
+          <span className="text-emerald-700 font-medium">{after ?? "—"}</span>
+        </>
+      ) : (
+        <span>{before ?? "—"}</span>
+      )}
+    </div>
+  );
+}
+
+function DiffBlock({ label, before, after }: { label: string; before: string | null | undefined; after: string | null | undefined }) {
+  if (!before && !after) return null;
+  const changed = before !== after;
+  if (!changed) return null;
+
+  return (
+    <div className="space-y-1 pt-1">
+      <span className="text-muted-foreground">{label}:</span>
+      {before && (
+        <div className="rounded bg-red-50 px-2 py-1 text-red-800 dark:bg-red-950/20 dark:text-red-300 line-through text-[11px] leading-relaxed max-h-24 overflow-auto">
+          {before}
+        </div>
+      )}
+      {after && (
+        <div className="rounded bg-emerald-50 px-2 py-1 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-300 text-[11px] leading-relaxed max-h-24 overflow-auto">
+          {after}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function hasChanges(before: PropertySnapshot, after: PropertySnapshot, fixAction: string): boolean {
+  if (before.score !== after.score) return true;
+  if (before.hasContentEs !== after.hasContentEs) return true;
+  if (before.hasContentEn !== after.hasContentEn) return true;
+  if (before.contentPreview !== after.contentPreview) return true;
+  if (before.metaTitle !== after.metaTitle) return true;
+  if (fixAction === "re_enrich" || fixAction === "data_patch") {
+    if (before.bedrooms !== after.bedrooms) return true;
+    if (before.priceCents !== after.priceCents) return true;
+    if (before.state !== after.state) return true;
+  }
+  return false;
+}
