@@ -195,17 +195,31 @@ export async function completeTest(
 
     const testIds = campaign.testIds as string[];
     const testAfter = await snapshotProperties(db, testIds, campaign.rule);
+    const before = (campaign.testBefore ?? []) as PropertySnapshot[];
+    const afterMap = new Map(testAfter.map((a) => [a.propertyId, a]));
+    const fixAction = campaign.fixAction as FixActionKind;
 
+    let pending = 0;
+    for (const b of before) {
+      const a = afterMap.get(b.propertyId);
+      if (!a || !isWorkerDone(fixAction, b, a)) pending++;
+    }
+
+    // Always save the latest snapshot
     await db
       .update(optimizerCampaigns)
       .set({
-        status: "review",
-        testDoneAt: new Date(),
         testAfter,
+        ...(pending === 0 ? { status: "review", testDoneAt: new Date() } : {}),
       })
       .where(eq(optimizerCampaigns.id, campaignId));
 
     revalidatePath("/admin/optimizer");
+
+    if (pending > 0) {
+      return { error: `${pending} de ${before.length} listings aún no procesados. Los workers deben estar corriendo. Intentá de nuevo en unos minutos.` };
+    }
+
     return {};
   } catch (err) {
     return { error: `completeTest failed: ${err instanceof Error ? err.message : String(err)}` };
@@ -310,14 +324,22 @@ export async function verifyResults(
 
     const before = (campaign.testBefore ?? []) as PropertySnapshot[];
     const afterMap = new Map(testAfter.map((a) => [a.propertyId, a]));
+    const fixAction = campaign.fixAction as FixActionKind;
 
     let resolved = 0;
     let pending = 0;
     for (const b of before) {
       const a = afterMap.get(b.propertyId);
       if (!a) { pending++; continue; }
+
+      // Check if the worker actually processed the job
+      const workerDone = isWorkerDone(fixAction, b, a);
+      if (!workerDone) {
+        pending++;
+        continue;
+      }
+
       if (a.issues.length === 0 && b.issues.length > 0) resolved++;
-      else if (a.hasContentEs === b.hasContentEs && a.score === b.score) pending++;
     }
 
     const allProcessed = pending === 0;
@@ -426,6 +448,31 @@ async function enqueueSupervisorForIds(db: ReturnType<typeof getDb>, ids: string
     .from(properties).where(inArray(properties.id, ids));
   for (const p of props) {
     await enqueueSupervisorRecheck({ sourceId: p.sourceId, crawlRunId: p.lastCrawlRunId ?? "", propertyId: p.id });
+  }
+}
+
+function isWorkerDone(
+  fixAction: FixActionKind,
+  before: PropertySnapshot,
+  after: PropertySnapshot,
+): boolean {
+  switch (fixAction) {
+    case "reprocess_paraphrase":
+      // Worker done = content was nullified then regenerated (back to ✓)
+      // If contentEs is still null, worker hasn't finished
+      return after.hasContentEs;
+    case "retranslate":
+      // Worker done = EN and FR regenerated
+      return after.hasContentEn && after.hasContentFr;
+    case "re_enrich":
+      // For now, check if score changed (proxy for re-extraction)
+      return after.score !== before.score;
+    case "data_patch":
+    case "bulk_status":
+      // These are synchronous DB updates — always "done"
+      return true;
+    default:
+      return true;
   }
 }
 
