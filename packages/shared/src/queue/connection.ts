@@ -9,11 +9,14 @@ function getRedisUrl(): string {
 }
 
 export function getRedisConnection(): ConnectionOptions {
-  const url = new URL(getRedisUrl());
+  const raw = getRedisUrl();
+  const url = new URL(raw);
+  const useTls = url.protocol === "rediss:";
   return {
     host: url.hostname,
     port: Number(url.port) || 6379,
     password: url.password || undefined,
     username: url.username || undefined,
+    ...(useTls ? { tls: {} } : {}),
   };
 }
