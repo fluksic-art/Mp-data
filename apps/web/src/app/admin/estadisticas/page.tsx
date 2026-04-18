@@ -23,7 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CurrencyToggle } from "./currency-toggle";
+import { StatsFilters } from "./stats-filters";
 import {
   HorizontalBarChart,
   GroupedBarChart,
@@ -34,19 +34,93 @@ import {
   StackedAreaChart,
   PriceRangeBarChart,
 } from "./charts";
+import type { SQL } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-const ACTIVE_STATUS_FILTER = sql`status NOT IN ('archived', 'possible_duplicate')`;
-
 type Props = {
-  searchParams: Promise<{ currency?: string }>;
+  searchParams: Promise<{
+    currency?: string;
+    city?: string;
+    type?: string;
+    listingType?: string;
+    status?: string;
+  }>;
 };
 
 export default async function EstadisticasPage({ searchParams }: Props) {
   const params = await searchParams;
   const currency = params.currency === "USD" ? "USD" : "MXN";
+  const cityFilter = params.city?.trim() || undefined;
+  const typeFilter = params.type?.trim() || undefined;
+  const listingFilter = params.listingType?.trim() || undefined;
+  const statusFilter = params.status?.trim() || undefined; // "published" | "all" | undefined(=active)
   const db = getDb();
+
+  // Dropdown options (unfiltered - always show all cities/types available)
+  const citiesResult = await db.execute<{ city: string }>(sql`
+    SELECT DISTINCT city FROM properties
+    WHERE status NOT IN ('archived', 'possible_duplicate')
+      AND city IS NOT NULL AND TRIM(city) != ''
+    ORDER BY city
+  `);
+  const propertyTypesResult = await db.execute<{ property_type: string }>(sql`
+    SELECT DISTINCT property_type FROM properties
+    WHERE status NOT IN ('archived', 'possible_duplicate')
+    ORDER BY property_type
+  `);
+  const cityOptions = citiesResult.map((r) => r.city);
+  const propertyTypeOptions = propertyTypesResult.map((r) => r.property_type);
+
+  // Build a WHERE-clause SQL fragment based on active filters.
+  // Allows skipping specific filters when a chart displays that dimension
+  // (e.g. skip city filter for the "by city" chart so it still shows context).
+  function buildFilter(opts: {
+    prefix?: string;
+    skipCity?: boolean;
+    skipType?: boolean;
+    skipListing?: boolean;
+    skipStatus?: boolean;
+  } = {}): SQL {
+    const p = opts.prefix ? `${opts.prefix}.` : "";
+    const parts: SQL[] = [];
+
+    if (!opts.skipStatus) {
+      if (statusFilter === "published") {
+        parts.push(sql.raw(`${p}status = 'published'`));
+      } else if (statusFilter !== "all") {
+        parts.push(sql.raw(`${p}status NOT IN ('archived', 'possible_duplicate')`));
+      }
+    }
+    if (cityFilter && !opts.skipCity) {
+      parts.push(sql`${sql.raw(`${p}city`)} = ${cityFilter}`);
+    }
+    if (typeFilter && !opts.skipType) {
+      parts.push(sql`${sql.raw(`${p}property_type`)} = ${typeFilter}`);
+    }
+    if (listingFilter && !opts.skipListing) {
+      parts.push(sql`${sql.raw(`${p}listing_type`)} = ${listingFilter}`);
+    }
+    if (parts.length === 0) return sql`TRUE`;
+    let combined = parts[0]!;
+    for (let i = 1; i < parts.length; i++) {
+      combined = sql`${combined} AND ${parts[i]}`;
+    }
+    return combined;
+  }
+
+  const ACTIVE_STATUS_FILTER = buildFilter();
+  const FILTER_NO_CITY = buildFilter({ skipCity: true });
+  const FILTER_NO_TYPE = buildFilter({ skipType: true });
+  const FILTER_NO_LISTING = buildFilter({ skipListing: true });
+  // For price analyses: use listingFilter if set, otherwise default to 'sale'.
+  // These filters skip listing (handled separately below) and optionally city/type.
+  const effectiveListing = listingFilter ?? "sale";
+  const FILTER_PRICE = buildFilter({ skipListing: true });
+  const FILTER_PRICE_NO_CITY = buildFilter({ skipCity: true, skipListing: true });
+  const FILTER_PRICE_NO_TYPE = buildFilter({ skipType: true, skipListing: true });
+  const FILTER_P = buildFilter({ prefix: "p" });
+  const hasPropertyFilters = Boolean(cityFilter || typeFilter || listingFilter);
 
   // ─────────────────────────────────────────────────────────
   // SECTION 1: Radiografia del Mercado
@@ -61,10 +135,10 @@ export default async function EstadisticasPage({ searchParams }: Props) {
       percentile_cont(0.5) WITHIN GROUP (ORDER BY price_cents) AS median,
       COUNT(*)::int AS priced_count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_PRICE}
       AND price_cents IS NOT NULL
       AND currency = ${currency}
-      AND listing_type = 'sale'
+      AND listing_type = ${effectiveListing}
   `);
 
   const [newLast30] = await db.execute<{ count: number; prev: number }>(sql`
@@ -78,12 +152,12 @@ export default async function EstadisticasPage({ searchParams }: Props) {
   const [medianPricePerM2] = await db.execute<{ median: number | null }>(sql`
     SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price_cents::numeric / construction_m2) AS median
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_PRICE}
       AND price_cents IS NOT NULL
       AND construction_m2 IS NOT NULL
       AND construction_m2 > 0
       AND currency = ${currency}
-      AND listing_type = 'sale'
+      AND listing_type = ${effectiveListing}
   `);
 
   const inventoryByListingType = await db.execute<{
@@ -93,7 +167,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
   }>(sql`
     SELECT listing_type, property_type, COUNT(*)::int AS count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_NO_LISTING}
     GROUP BY listing_type, property_type
     ORDER BY listing_type, count DESC
   `);
@@ -101,7 +175,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
   const propertiesByCity = await db.execute<{ city: string; count: number }>(sql`
     SELECT city, COUNT(*)::int AS count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_NO_CITY}
     GROUP BY city
     ORDER BY count DESC
     LIMIT 15
@@ -128,10 +202,10 @@ export default async function EstadisticasPage({ searchParams }: Props) {
       percentile_cont(1.0) WITHIN GROUP (ORDER BY price_cents)::bigint AS max,
       COUNT(*)::int AS count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_PRICE_NO_TYPE}
       AND price_cents IS NOT NULL
       AND currency = ${currency}
-      AND listing_type = 'sale'
+      AND listing_type = ${effectiveListing}
     GROUP BY property_type
     HAVING COUNT(*) >= 3
     ORDER BY median DESC
@@ -147,12 +221,12 @@ export default async function EstadisticasPage({ searchParams }: Props) {
       percentile_cont(0.5) WITHIN GROUP (ORDER BY price_cents::numeric / construction_m2)::bigint AS median_m2,
       COUNT(*)::int AS count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_PRICE_NO_CITY}
       AND price_cents IS NOT NULL
       AND construction_m2 IS NOT NULL
       AND construction_m2 > 0
       AND currency = ${currency}
-      AND listing_type = 'sale'
+      AND listing_type = ${effectiveListing}
     GROUP BY city
     HAVING COUNT(*) >= 5
     ORDER BY median_m2 DESC
@@ -171,12 +245,12 @@ export default async function EstadisticasPage({ searchParams }: Props) {
       percentile_cont(0.5) WITHIN GROUP (ORDER BY price_cents::numeric / construction_m2)::bigint AS median_m2,
       COUNT(*)::int AS count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_PRICE}
       AND price_cents IS NOT NULL
       AND construction_m2 IS NOT NULL
       AND construction_m2 > 0
       AND currency = ${currency}
-      AND listing_type = 'sale'
+      AND listing_type = ${effectiveListing}
       AND neighborhood IS NOT NULL
       AND neighborhood != ''
     GROUP BY neighborhood, city
@@ -214,7 +288,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
   const typeDistribution = await db.execute<{ property_type: string; count: number }>(sql`
     SELECT property_type, COUNT(*)::int AS count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_NO_TYPE}
     GROUP BY property_type
     ORDER BY count DESC
   `);
@@ -226,7 +300,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
   }>(sql`
     SELECT property_type, bedrooms, COUNT(*)::int AS count
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_NO_TYPE}
       AND bedrooms IS NOT NULL
       AND bedrooms BETWEEN 0 AND 8
       AND property_type IN ('apartment', 'house', 'villa', 'penthouse')
@@ -264,7 +338,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
     FROM amenities a
     JOIN property_amenities pa ON pa.amenity_id = a.id
     JOIN properties p ON p.id = pa.property_id
-    WHERE p.status NOT IN ('archived', 'possible_duplicate')
+    WHERE ${FILTER_P}
     GROUP BY a.id, a.name_es, a.category
     ORDER BY count DESC
     LIMIT 20
@@ -371,7 +445,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
         FILTER (WHERE price_cents IS NOT NULL AND construction_m2 > 0 AND currency = 'MXN' AND listing_type = 'sale')::bigint AS median_m2_price_mxn,
       mode() WITHIN GROUP (ORDER BY property_type) AS dominant_type
     FROM properties
-    WHERE ${ACTIVE_STATUS_FILTER}
+    WHERE ${FILTER_NO_CITY}
     GROUP BY city
     ORDER BY total DESC
     LIMIT 20
@@ -414,8 +488,10 @@ export default async function EstadisticasPage({ searchParams }: Props) {
       COUNT(*) FILTER (WHERE source = 'contact_form')::int AS form,
       COUNT(*) FILTER (WHERE source = 'phone_click')::int AS phone,
       COUNT(*) FILTER (WHERE source NOT IN ('whatsapp_cta', 'contact_form', 'phone_click'))::int AS other
-    FROM leads
+    FROM leads l
+    ${hasPropertyFilters ? sql`INNER JOIN properties p ON p.id = l.property_id` : sql``}
     WHERE created_at >= NOW() - INTERVAL '12 weeks'
+    ${hasPropertyFilters ? sql`AND ${buildFilter({ prefix: "p", skipStatus: true })}` : sql``}
     GROUP BY week
     ORDER BY week
   `);
@@ -436,6 +512,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
     FROM properties p
     LEFT JOIN leads l ON l.property_id = p.id
     WHERE p.status = 'published'
+      AND ${buildFilter({ prefix: "p", skipStatus: true })}
     GROUP BY p.property_type, p.city
     HAVING COUNT(DISTINCT p.id) >= 3
     ORDER BY leads_per_listing DESC NULLS LAST
@@ -444,13 +521,15 @@ export default async function EstadisticasPage({ searchParams }: Props) {
 
   const leadsByLocale = await db.execute<{ locale: string; count: number }>(sql`
     SELECT locale, COUNT(*)::int AS count
-    FROM leads
+    FROM leads l
+    ${hasPropertyFilters ? sql`INNER JOIN properties p ON p.id = l.property_id WHERE ${buildFilter({ prefix: "p", skipStatus: true })}` : sql``}
     GROUP BY locale
     ORDER BY count DESC
   `);
 
   const [totalLeadsCount] = await db.execute<{ count: number }>(sql`
-    SELECT COUNT(*)::int AS count FROM leads
+    SELECT COUNT(*)::int AS count FROM leads l
+    ${hasPropertyFilters ? sql`INNER JOIN properties p ON p.id = l.property_id WHERE ${buildFilter({ prefix: "p", skipStatus: true })}` : sql``}
   `);
 
   // ─────────────────────────────────────────────────────────
@@ -497,7 +576,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
       COUNT(p.construction_m2) FILTER (WHERE p.construction_m2 > 0)::int AS with_m2,
       COUNT(p.developer_name) FILTER (WHERE p.developer_name IS NOT NULL AND TRIM(p.developer_name) != '')::int AS with_developer
     FROM sources s
-    LEFT JOIN properties p ON p.source_id = s.id AND p.status NOT IN ('archived', 'possible_duplicate')
+    LEFT JOIN properties p ON p.source_id = s.id AND ${FILTER_P}
     GROUP BY s.id
     ORDER BY total DESC
   `);
@@ -513,6 +592,7 @@ export default async function EstadisticasPage({ searchParams }: Props) {
       COUNT(*) FILTER (WHERE status = 'archived')::int AS archived_count
     FROM properties
     WHERE first_seen_at >= NOW() - INTERVAL '12 months'
+      AND ${buildFilter({ skipStatus: true })}
     GROUP BY month
     ORDER BY month
   `);
@@ -563,19 +643,29 @@ export default async function EstadisticasPage({ searchParams }: Props) {
   const prevCount = newLast30?.prev ?? 0;
   const deltaPct = prevCount > 0 ? Math.round(((newCount - prevCount) / prevCount) * 100) : null;
 
+  const hasActiveFilters = Boolean(cityFilter || typeFilter || listingFilter || statusFilter);
+
   return (
     <div className="space-y-10">
-      <div className="flex items-end justify-between">
+      <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Estadisticas de Mercado</h1>
           <p className="text-sm text-muted-foreground">
-            Inteligencia de mercado inmobiliario — {totalActive?.count ?? 0} propiedades activas
+            Inteligencia de mercado inmobiliario — {totalActive?.count ?? 0} propiedades
+            {hasActiveFilters && " (filtradas)"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Moneda</span>
-          <CurrencyToggle current={currency} />
-        </div>
+        <StatsFilters
+          cities={cityOptions}
+          propertyTypes={propertyTypeOptions}
+          current={{
+            currency,
+            city: cityFilter,
+            propertyType: typeFilter,
+            listingType: listingFilter,
+            status: statusFilter,
+          }}
+        />
       </div>
 
       {/* ─────────────────────────────────────────────────────
