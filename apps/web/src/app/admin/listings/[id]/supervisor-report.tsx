@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,6 @@ interface Props {
 export function SupervisorReport(props: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const issues = props.supervisorIssues ?? [];
   const errorIssues = issues.filter((i) => i.severity === "error");
@@ -34,20 +34,37 @@ export function SupervisorReport(props: Props) {
   const infoIssues = issues.filter((i) => i.severity === "info");
 
   const handleRun = (force: boolean) => {
+    const toastId = toast.loading(
+      force ? "Re-corriendo check (force)…" : "Encolando check…",
+    );
     startTransition(async () => {
-      setActionMessage("Encolando…");
-      const res = await triggerSupervisorSingle(props.propertyId, { force });
-      setActionMessage(
-        res.queued ? "✓ Job encolado, espera unos segundos y recarga" : "No se pudo encolar",
-      );
-      router.refresh();
+      try {
+        const res = await triggerSupervisorSingle(props.propertyId, { force });
+        if (res.queued) {
+          toast.success("Job encolado — actualiza en unos segundos", { id: toastId });
+          router.refresh();
+        } else {
+          toast.error("No se pudo encolar", { id: toastId });
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error inesperado", { id: toastId });
+      }
     });
   };
 
   const handleResolve = (rule: string) => {
     startTransition(async () => {
-      await resolveSupervisorIssue(props.propertyId, rule);
-      router.refresh();
+      try {
+        const res = await resolveSupervisorIssue(props.propertyId, rule);
+        toast.success(
+          res.remaining === 0
+            ? "Issue resuelto · no quedan issues pendientes"
+            : `Issue resuelto · ${res.remaining} restantes`,
+        );
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error inesperado");
+      }
     });
   };
 
@@ -136,9 +153,6 @@ export function SupervisorReport(props: Props) {
               />
             )}
           </>
-        )}
-        {actionMessage && (
-          <p className="text-xs text-muted-foreground">{actionMessage}</p>
         )}
       </CardContent>
     </Card>

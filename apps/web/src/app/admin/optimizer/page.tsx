@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getFixForRule } from "@mpgenesis/shared";
+import { PageHeader } from "@/components/page-header";
 import { CreateCampaignButton } from "./campaign-card";
 import { CampaignCard } from "./campaign-card";
 
@@ -66,19 +67,20 @@ export default async function OptimizerPage() {
   );
 
   return (
-    <div>
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Optimizer</h1>
-        <p className="text-sm text-muted-foreground">
-          Remediación controlada de issues identificados por el Supervisor.
-          Crea campañas, prueba en batch, revisa y aplica.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Calidad"
+        title="Optimizer"
+        description="Remediación controlada de issues identificados por el Supervisor. Crea campañas, prueba en batch, revisa y aplica."
+      />
 
       {/* Campaigns section */}
       {campaigns.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-3 text-lg font-semibold">Campañas</h2>
+        <div>
+          <h2 className="text-eyebrow mb-3 flex items-center gap-3">
+            Campañas
+            <span aria-hidden className="h-px flex-1 bg-border" />
+          </h2>
           <div className="space-y-3">
             {campaigns.map((c) => (
               <CampaignCard key={c.id} campaign={c} />
@@ -89,7 +91,10 @@ export default async function OptimizerPage() {
 
       {/* Issues table */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold">Issues prioritarios</h2>
+        <h2 className="text-eyebrow mb-4 flex items-center gap-3">
+          Issues prioritarios
+          <span aria-hidden className="h-px flex-1 bg-border" />
+        </h2>
         <Card className="overflow-x-auto">
           <Table>
             <TableHeader>

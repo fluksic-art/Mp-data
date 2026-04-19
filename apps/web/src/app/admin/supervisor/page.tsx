@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SUPERVISOR_CHECK_VERSION, type SupervisorIssue } from "@mpgenesis/shared";
+import { PageHeader } from "@/components/page-header";
 import { TriggerForm } from "./trigger-form";
 
 export const dynamic = "force-dynamic";
@@ -158,16 +159,19 @@ export default async function SupervisorPage({ searchParams }: Props) {
   const avgScore = avgScoreRow[0]?.value ?? null;
 
   return (
-    <div>
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Supervisor</h1>
-        <p className="text-sm text-muted-foreground">
-          Auditoría de inconsistencias factuales + calidad de descripción contra el manual Propyte.{" "}
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
-            check v{SUPERVISOR_CHECK_VERSION}
-          </span>
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Calidad"
+        title="Supervisor"
+        description={
+          <>
+            Auditoría de inconsistencias factuales + calidad de descripción contra el manual Propyte.{" "}
+            <span className="ml-1 inline-block rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+              check v{SUPERVISOR_CHECK_VERSION}
+            </span>
+          </>
+        }
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Revisados" value={String(totalChecked[0]?.value ?? 0)} />
@@ -191,8 +195,11 @@ export default async function SupervisorPage({ searchParams }: Props) {
 
       <TriggerForm propertyTypes={propertyTypes.map((p) => p.propertyType)} />
 
-      <div className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold">Issues por regla</h2>
+      <div>
+        <h2 className="text-eyebrow mb-4 flex items-center gap-3">
+          Issues por regla
+          <span aria-hidden className="h-px flex-1 bg-border" />
+        </h2>
         <Card className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -281,8 +288,11 @@ export default async function SupervisorPage({ searchParams }: Props) {
         </div>
       )}
 
-      <div className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold">Peor puntuados</h2>
+      <div>
+        <h2 className="text-eyebrow mb-4 flex items-center gap-3">
+          Peor puntuados
+          <span aria-hidden className="h-px flex-1 bg-border" />
+        </h2>
         <Card className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -387,16 +397,14 @@ function Stat({
 }) {
   const tone =
     accent === "error"
-      ? "text-red-600 dark:text-red-400"
+      ? "text-destructive"
       : accent === "warning"
-        ? "text-amber-600 dark:text-amber-400"
+        ? "text-warning"
         : "text-foreground";
   return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className={`mt-1 text-2xl font-semibold tabular-nums ${tone}`}>
+    <div className="flex flex-col gap-1.5 rounded-xl bg-card p-4 ring-1 ring-border transition-colors hover:ring-foreground/15">
+      <p className="text-eyebrow">{label}</p>
+      <p className={`text-2xl font-semibold tabular-nums tracking-tight ${tone}`}>
         {value}
       </p>
     </div>
@@ -407,10 +415,10 @@ function ScorePill({ score }: { score: number | null }) {
   if (score === null) return <span className="text-xs text-muted-foreground">—</span>;
   const tone =
     score >= 85
-      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+      ? "bg-success/15 text-success"
       : score >= 70
-        ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-        : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300";
+        ? "bg-warning/20 text-warning-foreground"
+        : "bg-destructive/15 text-destructive";
   return (
     <span
       className={`inline-flex min-w-[2.5rem] items-center justify-center rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ${tone}`}

@@ -28,8 +28,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/page-header";
 import { AutoRefresh } from "./auto-refresh";
 import { ListingsToolbar } from "./toolbar";
+import { ListingsGrid, type GridListing } from "./listings-grid";
+import { ViewToggle } from "./view-toggle";
 import { parseVisibleColumns, COLUMN_DEFAULT_WIDTHS, type ColumnKey } from "./columns";
 import { DuplicateActions } from "./duplicate-actions";
 import { ResizableColgroup, ResizeHandle } from "./resizable";
@@ -84,6 +87,7 @@ async function ListingsPageInner({ searchParams }: Props) {
   const bedrooms = str(params.bedrooms);
   const supervisorRule = str(params.supervisorRule);
   const visibleColumns = parseVisibleColumns(str(params.columns));
+  const view: "grid" | "table" = str(params.view) === "grid" ? "grid" : "table";
 
   // Build WHERE conditions
   const conditions: SQL[] = [];
@@ -172,6 +176,18 @@ async function ListingsPageInner({ searchParams }: Props) {
     .groupBy(propertyImages.propertyId)
     .as("img_counts");
 
+  // Primary image subquery (position 0 — the first image for each listing)
+  const primaryImageSq = db
+    .select({
+      propertyId: propertyImages.propertyId,
+      url: sql<string>`COALESCE(${propertyImages.cleanUrl}, ${propertyImages.rawUrl}, ${propertyImages.originalUrl})`.as(
+        "primary_image_url",
+      ),
+    })
+    .from(propertyImages)
+    .where(eq(propertyImages.position, 0))
+    .as("primary_img");
+
   // Main query
   const listings = await db
     .select({
@@ -198,6 +214,7 @@ async function ListingsPageInner({ searchParams }: Props) {
       contentEn: properties.contentEn,
       contentFr: properties.contentFr,
       imageCount: imageCountSq.imageCount,
+      primaryImageUrl: primaryImageSq.url,
       supervisorScore: properties.supervisorScore,
       supervisorIssues: properties.supervisorIssues,
       qaStatus: properties.qaStatus,
@@ -205,6 +222,7 @@ async function ListingsPageInner({ searchParams }: Props) {
     .from(properties)
     .leftJoin(sources, eq(properties.sourceId, sources.id))
     .leftJoin(imageCountSq, eq(properties.id, imageCountSq.propertyId))
+    .leftJoin(primaryImageSq, eq(properties.id, primaryImageSq.propertyId))
     .where(where)
     .orderBy(orderBy)
     .limit(perPage)
@@ -234,17 +252,23 @@ async function ListingsPageInner({ searchParams }: Props) {
   const colCount = visibleColumns.length;
 
   return (
-    <div>
-      <div className="mb-4 flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
-          <p className="text-sm text-muted-foreground">
-            {totalCount} of {totalAll?.value ?? 0} properties
-            {where ? " (filtered)" : ""}
-          </p>
-          <AutoRefresh />
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Inventario"
+        title="Listings"
+        description={
+          <>
+            <span className="tabular-nums">{totalCount.toLocaleString()}</span>
+            {" de "}
+            <span className="tabular-nums">
+              {(totalAll?.value ?? 0).toLocaleString()}
+            </span>
+            {" propiedades"}
+            {where ? " (filtrado)" : ""}
+          </>
+        }
+      />
+      <AutoRefresh />
 
       {supervisorRule && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/30">
@@ -267,27 +291,41 @@ async function ListingsPageInner({ searchParams }: Props) {
         </div>
       )}
 
-      <ListingsToolbar
-        currentStatus={status}
-        currentCity={city}
-        currentPropertyType={propertyType}
-        currentListingType={listingType}
-        currentSource={source}
-        currentSearch={search}
-        currentPerPage={perPage}
-        currentPipeline={pipeline}
-        currentSort={sort}
-        currentColumns={visibleColumns}
-        currentMinPrice={minPrice}
-        currentMaxPrice={maxPrice}
-        currentBedrooms={bedrooms}
-        statuses={statusesQ.map((s) => s.status)}
-        cities={citiesQ.map((c) => c.city)}
-        propertyTypes={propTypesQ.map((p) => p.propertyType)}
-        listingTypes={listingTypesQ.map((t) => t.listingType)}
-        sourceDomains={sourceDomainsQ.map((s) => s.domain)}
-      />
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <ListingsToolbar
+            currentStatus={status}
+            currentCity={city}
+            currentPropertyType={propertyType}
+            currentListingType={listingType}
+            currentSource={source}
+            currentSearch={search}
+            currentPerPage={perPage}
+            currentPipeline={pipeline}
+            currentSort={sort}
+            currentColumns={visibleColumns}
+            currentMinPrice={minPrice}
+            currentMaxPrice={maxPrice}
+            currentBedrooms={bedrooms}
+            statuses={statusesQ.map((s) => s.status)}
+            cities={citiesQ.map((c) => c.city)}
+            propertyTypes={propTypesQ.map((p) => p.propertyType)}
+            listingTypes={listingTypesQ.map((t) => t.listingType)}
+            sourceDomains={sourceDomainsQ.map((s) => s.domain)}
+          />
+        </div>
+        <div className="shrink-0 pt-0.5">
+          <ViewToggle current={view} />
+        </div>
+      </div>
 
+      {view === "grid" ? (
+        <div className="mt-4">
+          <ListingsGrid listings={listings as unknown as GridListing[]} />
+        </div>
+      ) : null}
+
+      {view === "table" ? (
       <Card className="mt-4 overflow-x-auto">
         <Table className="table-fixed [&_td]:overflow-hidden [&_td_p]:truncate [&_td_span]:truncate">
           <ResizableColgroup
@@ -327,6 +365,7 @@ async function ListingsPageInner({ searchParams }: Props) {
           </TableBody>
         </Table>
       </Card>
+      ) : null}
 
       {/* Pagination */}
       {totalPages > 1 && (

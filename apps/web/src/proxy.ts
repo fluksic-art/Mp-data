@@ -37,7 +37,6 @@ async function verifyToken(cookie: string, secret: string): Promise<boolean> {
   const signature = cookie.slice(lastDot + 1);
   const expected = await hmacSha256(secret, token);
 
-  // Constant-time comparison
   if (signature.length !== expected.length) return false;
   const a = hexToBytes(signature);
   const b = hexToBytes(expected);
@@ -48,10 +47,9 @@ async function verifyToken(cookie: string, secret: string): Promise<boolean> {
   return diff === 0;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only protect /admin routes (except /admin/login)
   if (!pathname.startsWith("/admin") || pathname.startsWith("/admin/login")) {
     return NextResponse.next();
   }

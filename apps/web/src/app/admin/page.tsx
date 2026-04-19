@@ -7,6 +7,7 @@ import {
   propertyImages,
 } from "@mpgenesis/database";
 import { count, desc, eq, sql, and, isNotNull } from "drizzle-orm";
+import { ArrowUpRight } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -14,6 +15,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
 import { AutoRefresh } from "./listings/auto-refresh";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +24,11 @@ export const dynamic = "force-dynamic";
 export default async function AdminDashboard() {
   const db = getDb();
 
-  // ── Counts ──
   const [propertyCount] = await db.select({ value: count() }).from(properties);
   const [sourceCount] = await db.select({ value: count() }).from(sources);
   const [crawlCount] = await db.select({ value: count() }).from(crawlRuns);
   const [imageCount] = await db.select({ value: count() }).from(propertyImages);
 
-  // ── Pipeline stages ──
   const [extracted] = await db
     .select({ value: count() })
     .from(properties)
@@ -54,37 +55,24 @@ export default async function AdminDashboard() {
       ),
     );
 
-  // ── Status breakdown ──
   const statusCounts = await db
-    .select({
-      status: properties.status,
-      count: count(),
-    })
+    .select({ status: properties.status, count: count() })
     .from(properties)
     .groupBy(properties.status);
 
-  // ── City breakdown (top 10) ──
   const cityCounts = await db
-    .select({
-      city: properties.city,
-      count: count(),
-    })
+    .select({ city: properties.city, count: count() })
     .from(properties)
     .groupBy(properties.city)
     .orderBy(desc(count()))
     .limit(10);
 
-  // ── Property type breakdown ──
   const typeCounts = await db
-    .select({
-      propertyType: properties.propertyType,
-      count: count(),
-    })
+    .select({ propertyType: properties.propertyType, count: count() })
     .from(properties)
     .groupBy(properties.propertyType)
     .orderBy(desc(count()));
 
-  // ── Crawl runs stats ──
   const crawlStats = await db
     .select({
       totalPages: sql<number>`COALESCE(SUM(${crawlRuns.pagesCrawled}), 0)`,
@@ -95,22 +83,19 @@ export default async function AdminDashboard() {
     })
     .from(crawlRuns);
 
-  // ── Cost estimates ──
   const totalProps = propertyCount?.value ?? 0;
-  const tier3Count = Math.round(totalProps * 0.7); // ~70% need Tier 3
+  const tier3Count = Math.round(totalProps * 0.7);
   const extractedCount = extracted?.value ?? 0;
-  const paraphrasedCount = paraphrased?.value ?? 0;
+  const _paraphrasedCount = paraphrased?.value ?? 0;
   const translatedCount = translated?.value ?? 0;
   const fullyTranslated = translated?.value ?? 0;
 
-  // Estimated costs based on measured rates
   const costExtraction = tier3Count * 0.005;
   const costParaphrase = (totalProps - extractedCount) * 0.017;
   const costTranslate = fullyTranslated * 0.04;
-  const costProxy = 0.78; // measured from batch crawl
+  const costProxy = 0.78;
   const costTotal = costExtraction + costParaphrase + costTranslate + costProxy;
 
-  // ── Recent crawls ──
   const recentCrawls = await db
     .select({
       id: crawlRuns.id,
@@ -124,9 +109,8 @@ export default async function AdminDashboard() {
     .from(crawlRuns)
     .leftJoin(sources, eq(crawlRuns.sourceId, sources.id))
     .orderBy(desc(crawlRuns.startedAt))
-    .limit(10);
+    .limit(8);
 
-  // ── Recent listings ──
   const recentListings = await db
     .select({
       id: properties.id,
@@ -144,147 +128,126 @@ export default async function AdminDashboard() {
 
   const cs = crawlStats[0];
 
+  const translatedPct = totalProps > 0 ? (translatedCount / totalProps) * 100 : 0;
+
   return (
-    <div>
-      <div className="mb-6 flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Pipeline overview
-          </p>
-          <AutoRefresh />
-        </div>
-      </div>
+    <div className="space-y-12">
+      <PageHeader
+        eyebrow="Pipeline · Fase 1"
+        title="Panorama general"
+        description="Cobertura actual del pipeline, estado de los listings y costos estimados en tiempo real."
+      />
+      <AutoRefresh />
 
-      {/* ── Top stats ── */}
-      <div className="grid grid-cols-5 gap-3">
-        <StatCard label="Properties" value={totalProps} />
-        <StatCard label="Images" value={imageCount?.value ?? 0} />
-        <StatCard label="Sources" value={sourceCount?.value ?? 0} />
-        <StatCard label="Crawl Runs" value={crawlCount?.value ?? 0} />
+      <section className="grid gap-4 md:grid-cols-12">
         <StatCard
-          label="Est. Cost"
-          value={`$${costTotal.toFixed(2)}`}
-          sub="proxy + LLM"
+          variant="hero"
+          label="Propiedades indexadas"
+          value={totalProps}
+          deltaPct={translatedPct}
+          deltaLabel={`${translatedCount.toLocaleString()} traducidas a EN+FR`}
+          className="md:col-span-5"
         />
-      </div>
+        <div className="grid gap-3 md:col-span-7 md:grid-cols-2">
+          <StatCard label="Imágenes" value={imageCount?.value ?? 0} />
+          <StatCard label="Fuentes" value={sourceCount?.value ?? 0} />
+          <StatCard label="Crawl Runs" value={crawlCount?.value ?? 0} />
+          <StatCard
+            label="Costo estimado"
+            value={Number(costTotal.toFixed(2))}
+            prefix="$"
+            format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+          />
+        </div>
+      </section>
 
-      {/* ── Pipeline ── */}
-      <h2 className="mt-8 mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-        Pipeline Progress
-      </h2>
-      <div className="grid grid-cols-4 gap-3">
-        <PipelineCard
-          label="Extracted only"
-          value={extractedCount}
-          total={totalProps}
-          color="bg-orange-500"
-        />
-        <PipelineCard
-          label="Paraphrased (ES)"
-          value={totalProps - extractedCount}
-          total={totalProps}
-          color="bg-blue-500"
-        />
-        <PipelineCard
-          label="Translated (EN+FR)"
-          value={fullyTranslated}
-          total={totalProps}
-          color="bg-green-500"
-        />
-        <PipelineCard
-          label="Images downloaded"
-          value={imageCount?.value ?? 0}
-          total={totalProps * 16}
-          color="bg-purple-500"
-          sub={`~${Math.round((imageCount?.value ?? 0) / Math.max(totalProps, 1))} avg/listing`}
-        />
-      </div>
+      <section>
+        <SectionHeading>Pipeline</SectionHeading>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <PipelineCard
+            label="Solo extraído"
+            value={extractedCount}
+            total={totalProps}
+            accent="var(--chart-4)"
+          />
+          <PipelineCard
+            label="Parafraseado (ES)"
+            value={totalProps - extractedCount}
+            total={totalProps}
+            accent="var(--chart-2)"
+          />
+          <PipelineCard
+            label="Traducido (EN+FR)"
+            value={fullyTranslated}
+            total={totalProps}
+            accent="var(--chart-3)"
+          />
+          <PipelineCard
+            label="Imágenes descargadas"
+            value={imageCount?.value ?? 0}
+            total={totalProps * 16}
+            accent="var(--chart-5)"
+            sub={`~${Math.round((imageCount?.value ?? 0) / Math.max(totalProps, 1))} avg/listing`}
+          />
+        </div>
+      </section>
 
-      {/* ── Cost breakdown ── */}
-      <h2 className="mt-8 mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-        Estimated Costs (LLM + Proxy)
-      </h2>
-      <div className="grid grid-cols-4 gap-3">
-        <CostCard label="Proxy (DataImpulse)" value={costProxy} />
-        <CostCard label="Extraction (Haiku)" value={costExtraction} />
-        <CostCard label="Paraphrase (Sonnet)" value={costParaphrase} />
-        <CostCard label="Translate (Sonnet)" value={costTranslate} />
-      </div>
+      <section>
+        <SectionHeading>Costos estimados</SectionHeading>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <CostCard label="Proxy (DataImpulse)" value={costProxy} />
+          <CostCard label="Extracción (Haiku)" value={costExtraction} />
+          <CostCard label="Paráfrasis (Sonnet)" value={costParaphrase} />
+          <CostCard label="Traducción (Sonnet)" value={costTranslate} />
+        </div>
+      </section>
 
-      {/* ── Breakdowns ── */}
-      <div className="mt-8 grid grid-cols-3 gap-4">
-        {/* Status */}
+      <section className="grid gap-4 md:grid-cols-3">
+        <BreakdownCard title="Por estado">
+          <BreakdownList
+            items={statusCounts.map((s) => ({
+              key: s.status,
+              left: <StatusBadge status={s.status} />,
+              right: s.count,
+            }))}
+          />
+        </BreakdownCard>
+        <BreakdownCard title="Por ciudad (top 10)">
+          <BreakdownList
+            items={cityCounts.map((c) => ({
+              key: c.city ?? "—",
+              left: c.city,
+              right: c.count,
+            }))}
+          />
+        </BreakdownCard>
+        <BreakdownCard title="Por tipo">
+          <BreakdownList
+            items={typeCounts.map((t) => ({
+              key: t.propertyType ?? "—",
+              left: t.propertyType,
+              right: t.count,
+            }))}
+          />
+        </BreakdownCard>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">By Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1.5">
-              {statusCounts.map((s) => (
-                <li key={s.status} className="flex items-center justify-between text-sm">
-                  <StatusBadge status={s.status} />
-                  <span className="tabular-nums text-muted-foreground">{s.count}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-
-        {/* City */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">By City (top 10)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1.5">
-              {cityCounts.map((c) => (
-                <li key={c.city} className="flex items-center justify-between text-sm">
-                  <span>{c.city}</span>
-                  <span className="tabular-nums text-muted-foreground">{c.count}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-
-        {/* Type */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">By Type</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1.5">
-              {typeCounts.map((t) => (
-                <li key={t.propertyType} className="flex items-center justify-between text-sm">
-                  <span>{t.propertyType}</span>
-                  <span className="tabular-nums text-muted-foreground">{t.count}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Crawl runs + Recent listings ── */}
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">
-                Crawl Runs ({cs?.completed ?? 0} ok / {cs?.failed ?? 0} fail / {cs?.running ?? 0} running)
-              </CardTitle>
-            </div>
+            <CardTitle className="text-sm font-medium">
+              Crawl Runs · {cs?.completed ?? 0} ok / {cs?.failed ?? 0} fail / {cs?.running ?? 0} running
+            </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <ul className="space-y-2">
+            <ul className="space-y-2.5">
               {recentCrawls.map((c) => (
-                <li key={c.id} className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium">
+                <li key={c.id} className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
                       {c.sourceDomain ?? "—"}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
                       {c.pagesCrawled ?? 0} pages · {c.listingsExtracted ?? 0} extracted
                       {c.completedAt
                         ? ` · ${formatDuration(c.startedAt, c.completedAt)}`
@@ -299,32 +262,31 @@ export default async function AdminDashboard() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">
-                Recent Listings
-              </CardTitle>
+              <CardTitle className="text-sm font-medium">Listings recientes</CardTitle>
               <Link
                 href="/admin/listings"
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
-                View all →
+                Ver todos
+                <ArrowUpRight className="size-3" />
               </Link>
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <ul className="space-y-2">
+            <ul className="space-y-2.5">
               {recentListings.map((l) => (
                 <li key={l.id}>
                   <Link
                     href={`/admin/listings/${l.id}`}
-                    className="group flex items-start justify-between"
+                    className="group flex items-start justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium group-hover:text-primary">
+                      <p className="truncate text-sm font-medium transition-colors group-hover:text-primary">
                         {l.title.replace(/&#\d+;/g, "'").replace(/&amp;/g, "&")}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {l.city} · {l.propertyType}
                         {l.contentEs ? " · ES" : ""}
                         {l.contentEn ? " · EN" : ""}
@@ -337,34 +299,17 @@ export default async function AdminDashboard() {
             </ul>
           </CardContent>
         </Card>
-      </div>
+      </section>
     </div>
   );
 }
 
-// ── Components ──
-
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: number | string;
-  sub?: string;
-}) {
+function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold tabular-nums">{typeof value === "number" ? value.toLocaleString() : value}</div>
-        {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-      </CardContent>
-    </Card>
+    <h2 className="text-eyebrow flex items-center gap-3">
+      {children}
+      <span aria-hidden className="h-px flex-1 bg-border" />
+    </h2>
   );
 }
 
@@ -372,58 +317,92 @@ function PipelineCard({
   label,
   value,
   total,
-  color,
+  accent,
   sub,
 }: {
   label: string;
   value: number;
   total: number;
-  color: string;
+  accent: string;
   sub?: string;
 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-xl font-bold tabular-nums">
-          {value.toLocaleString()}
-          <span className="ml-1 text-sm font-normal text-muted-foreground">
-            / {total.toLocaleString()}
-          </span>
-        </div>
-        <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
-          <div
-            className={`h-1.5 rounded-full ${color}`}
-            style={{ width: `${Math.min(pct, 100)}%` }}
-          />
-        </div>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {pct}%{sub ? ` · ${sub}` : ""}
-        </p>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-2 rounded-xl bg-card p-4 ring-1 ring-border">
+      <p className="text-eyebrow">{label}</p>
+      <p className="text-xl font-semibold tabular-nums">
+        {value.toLocaleString()}
+        <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+          / {total.toLocaleString()}
+        </span>
+      </p>
+      <div
+        className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={`${label}: ${pct}%`}
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-500 ease-out"
+          style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: accent }}
+        />
+      </div>
+      <p className="text-[11px] text-muted-foreground tabular-nums">
+        {pct}%{sub ? ` · ${sub}` : ""}
+      </p>
+    </div>
   );
 }
 
 function CostCard({ label, value }: { label: string; value: number }) {
   return (
+    <div className="rounded-xl bg-card p-4 ring-1 ring-border">
+      <p className="text-eyebrow">{label}</p>
+      <p className="mt-2 text-xl font-semibold tabular-nums">
+        ${value.toFixed(2)}
+      </p>
+    </div>
+  );
+}
+
+function BreakdownCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
     <Card>
-      <CardHeader className="pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="text-lg font-bold tabular-nums">
-          ${value.toFixed(2)}
-        </div>
-      </CardContent>
+      <CardContent>{children}</CardContent>
     </Card>
+  );
+}
+
+function BreakdownList({
+  items,
+}: {
+  items: { key: string; left: React.ReactNode; right: number }[];
+}) {
+  return (
+    <ul className="space-y-1.5">
+      {items.map((i) => (
+        <li
+          key={i.key}
+          className="flex items-center justify-between text-sm"
+        >
+          <span className="truncate">{i.left}</span>
+          <span className="tabular-nums text-muted-foreground">
+            {i.right.toLocaleString()}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -436,7 +415,6 @@ function StatusBadge({ status }: { status: string }) {
         : status === "failed"
           ? "destructive"
           : "outline";
-
   return (
     <Badge variant={variant} className="text-[11px]">
       {status}

@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
-import { isAuthenticated, verifyCredentials, createSession } from "@/lib/auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { isAuthenticated } from "@/lib/auth";
+import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Login — MPgenesis Admin" };
 
@@ -14,59 +11,35 @@ export default async function LoginPage(props: {
   if (authed) redirect("/admin");
 
   const searchParams = await props.searchParams;
-  const error = searchParams.error;
+  const serverError = searchParams.error ? "Credenciales incorrectas" : undefined;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-editorial px-6">
+      <div
+        aria-hidden
+        className="bg-spotlight-brand pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] opacity-60"
+      />
+
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="grid size-11 place-items-center rounded-xl bg-primary font-display text-sm font-semibold text-primary-foreground shadow-md">
             M
           </div>
-          <CardTitle className="text-lg">MPgenesis Admin</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action={login}>
-            <div className="space-y-4">
-              {error && (
-                <p className="text-center text-sm text-destructive">
-                  Credenciales incorrectas
-                </p>
-              )}
-              <div className="space-y-1.5">
-                <Label htmlFor="user">Usuario</Label>
-                <Input id="user" name="user" required autoFocus />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                Entrar
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+          <p className="text-eyebrow mt-2">Admin</p>
+          <h1 className="text-display-md !text-3xl">Bienvenido de vuelta</h1>
+          <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+            Ingresa con tus credenciales para acceder al panel.
+          </p>
+        </div>
+
+        <div className="mt-8 rounded-2xl bg-card p-6 shadow-lg ring-1 ring-border">
+          <LoginForm serverError={serverError} />
+        </div>
+
+        <p className="mt-6 text-center text-[11px] text-muted-foreground">
+          v0.1.0 · Fase 1
+        </p>
+      </div>
     </div>
   );
-}
-
-async function login(formData: FormData) {
-  "use server";
-
-  const user = formData.get("user") as string;
-  const password = formData.get("password") as string;
-
-  if (!verifyCredentials(user, password)) {
-    redirect("/admin/login?error=1");
-  }
-
-  await createSession();
-  redirect("/admin");
 }

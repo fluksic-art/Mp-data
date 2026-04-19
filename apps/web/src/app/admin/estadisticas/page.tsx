@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
 import { StatsFilters } from "./stats-filters";
 import {
   HorizontalBarChart,
@@ -648,13 +649,19 @@ export default async function EstadisticasPage({ searchParams }: Props) {
   return (
     <div className="space-y-10">
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Estadisticas de Mercado</h1>
-          <p className="text-sm text-muted-foreground">
-            Inteligencia de mercado inmobiliario — {totalActive?.count ?? 0} propiedades
-            {hasActiveFilters && " (filtradas)"}
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="Inteligencia de mercado"
+          title="Estadísticas"
+          description={
+            <>
+              <span className="tabular-nums">
+                {(totalActive?.count ?? 0).toLocaleString()}
+              </span>
+              {" propiedades analizadas"}
+              {hasActiveFilters ? " (filtradas)" : ""}.
+            </>
+          }
+        />
         <StatsFilters
           cities={cityOptions}
           propertyTypes={propertyTypeOptions}
@@ -1362,16 +1369,19 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section>
-      <div className="mb-4 flex items-center gap-2">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {internal && (
-          <Badge variant="secondary" className="text-[10px]">
-            INTERNO
-          </Badge>
-        )}
+    <section className="space-y-4">
+      <div className="flex items-baseline gap-3">
+        <h2 className="text-eyebrow">
+          {title}
+          {internal && (
+            <span className="ml-2 rounded-full border border-border bg-muted px-1.5 py-0.5 font-mono text-[9px] tracking-normal text-muted-foreground">
+              INTERNO
+            </span>
+          )}
+        </h2>
+        <span aria-hidden className="h-px flex-1 bg-border" />
       </div>
-      {subtitle && <p className="mb-4 -mt-3 text-xs text-muted-foreground">{subtitle}</p>}
+      {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
       {children}
     </section>
   );
@@ -1387,38 +1397,38 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold tabular-nums">
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </div>
-        {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-2 rounded-xl bg-card p-4 ring-1 ring-border transition-colors hover:ring-foreground/15">
+      <p className="text-eyebrow">{label}</p>
+      <p className="text-2xl font-semibold tabular-nums tracking-tight">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </p>
+      {sub && <p className="text-[11px] text-muted-foreground tabular-nums">{sub}</p>}
+    </div>
   );
 }
 
 function CompletenessCard({ label, value }: { label: string; value: number }) {
-  const color =
-    value >= 90 ? "bg-emerald-500" : value >= 70 ? "bg-amber-500" : "bg-red-500";
+  const accent =
+    value >= 90 ? "var(--success)" : value >= 70 ? "var(--warning)" : "var(--destructive)";
+  const pct = Math.min(value, 100);
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-xl font-bold tabular-nums">{value.toFixed(1)}%</div>
-        <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
-          <div
-            className={`h-1.5 rounded-full ${color}`}
-            style={{ width: `${Math.min(value, 100)}%` }}
-          />
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-2 rounded-xl bg-card p-4 ring-1 ring-border">
+      <p className="text-eyebrow">{label}</p>
+      <p className="text-xl font-semibold tabular-nums">{value.toFixed(1)}%</p>
+      <div
+        className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={`${label}: ${pct.toFixed(1)}%`}
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-500 ease-out"
+          style={{ width: `${pct}%`, backgroundColor: accent }}
+        />
+      </div>
+    </div>
   );
 }
 

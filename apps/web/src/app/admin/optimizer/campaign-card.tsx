@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,8 +68,14 @@ export function CreateCampaignButton({
       disabled={isPending}
       onClick={() =>
         startTransition(async () => {
-          await createCampaign(rule, severity, category);
-          router.refresh();
+          const toastId = toast.loading("Creando campaña…");
+          try {
+            await createCampaign(rule, severity, category);
+            toast.success(`Campaña creada para ${rule}`, { id: toastId });
+            router.refresh();
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Error inesperado", { id: toastId });
+          }
         })
       }
       className="text-xs"
@@ -156,55 +163,54 @@ function StatusBadge({ status }: { status: string }) {
 
 function CampaignActions({ campaign }: { campaign: CampaignData }) {
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const act = (fn: () => Promise<{ error?: string } | unknown>) =>
+  const act = (label: string, fn: () => Promise<{ error?: string } | unknown>) =>
     startTransition(async () => {
-      setError(null);
-      const result = await fn();
-      if (result && typeof result === "object" && "error" in result && result.error) {
-        setError(String(result.error));
-        return;
+      const toastId = toast.loading(label);
+      try {
+        const result = await fn();
+        if (result && typeof result === "object" && "error" in result && result.error) {
+          toast.error(String(result.error), { id: toastId });
+          return;
+        }
+        toast.success(`${label} ✓`, { id: toastId });
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error inesperado", { id: toastId });
       }
-      router.refresh();
     });
 
   return (
     <div className="space-y-2">
-      {error && (
-        <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-400">
-          {error}
-        </div>
-      )}
       <div className="flex gap-2">
         {campaign.status === "draft" && (
-          <Button size="sm" disabled={isPending} onClick={() => act(() => runTestBatch(campaign.id))}>
+          <Button size="sm" disabled={isPending} onClick={() => act("Ejecutando test", () => runTestBatch(campaign.id))}>
             {isPending ? "Ejecutando..." : "Ejecutar test"}
           </Button>
         )}
         {campaign.status === "testing" && (
-          <Button size="sm" disabled={isPending} onClick={() => act(() => completeTest(campaign.id))}>
+          <Button size="sm" disabled={isPending} onClick={() => act("Cargando resultados", () => completeTest(campaign.id))}>
             {isPending ? "Cargando..." : "Ver resultados"}
           </Button>
         )}
         {campaign.status === "review" && (
           <>
-            <Button size="sm" disabled={isPending} onClick={() => act(() => approveAndRollout(campaign.id))}>
+            <Button size="sm" disabled={isPending} onClick={() => act("Aplicando rollout", () => approveAndRollout(campaign.id))}>
               {isPending ? "Aplicando..." : "Aprobar y aplicar a todos"}
             </Button>
-            <Button size="sm" variant="outline" disabled={isPending} onClick={() => act(() => cancelCampaign(campaign.id))}>
+            <Button size="sm" variant="outline" disabled={isPending} onClick={() => act("Cancelando campaña", () => cancelCampaign(campaign.id))}>
               Cancelar
             </Button>
           </>
         )}
         {campaign.status === "awaiting_workers" && (
-          <Button size="sm" disabled={isPending} onClick={() => act(() => verifyResults(campaign.id))}>
+          <Button size="sm" disabled={isPending} onClick={() => act("Verificando resultados", () => verifyResults(campaign.id))}>
             {isPending ? "Verificando..." : "Verificar resultados"}
           </Button>
         )}
         {["draft", "testing", "awaiting_workers"].includes(campaign.status) && (
-          <Button size="sm" variant="ghost" disabled={isPending} onClick={() => act(() => cancelCampaign(campaign.id))} className="text-muted-foreground">
+          <Button size="sm" variant="ghost" disabled={isPending} onClick={() => act("Cancelando campaña", () => cancelCampaign(campaign.id))} className="text-muted-foreground">
             Cancelar
           </Button>
         )}

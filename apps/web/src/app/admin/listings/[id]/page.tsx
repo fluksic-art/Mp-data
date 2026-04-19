@@ -1,5 +1,14 @@
 import { notFound } from "next/navigation";
+import { ViewTransition } from "react";
 import Link from "next/link";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { getDb } from "@/lib/db";
 import { properties, sources, propertyImages } from "@mpgenesis/database";
 import { eq } from "drizzle-orm";
@@ -10,6 +19,7 @@ import { LeadForm, WhatsAppCTA } from "@/components/lead-form";
 import { ContentPreview } from "@/components/content-preview";
 import type { SupervisorIssue } from "@mpgenesis/shared";
 import { SupervisorReport } from "./supervisor-report";
+import { ListingGallery } from "./gallery";
 
 export default async function ListingDetailPage({
   params,
@@ -47,45 +57,70 @@ export default async function ListingDetailPage({
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <Link
-        href="/admin/listings"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        ← Back to listings
-      </Link>
-
-      {/* Hero section */}
-      <div className="mt-4">
-        {heroImage && (
-          <div className="mb-6 aspect-[21/9] overflow-hidden rounded-xl border bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={heroImage}
-              alt={cleanTitle(listing.title)}
-              className="h-full w-full object-cover"
-            />
-          </div>
-        )}
-
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink
+              render={
+                <Link
+                  href="/admin/listings"
+                  transitionTypes={["nav-back"]}
+                />
+              }
+            >
+              Listings
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage className="max-w-md truncate">
               {cleanTitle(listing.title)}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {listing.propertyType} · {listing.listingType} · {listing.city},{" "}
-              {listing.state}
-            </p>
-          </div>
-          <StatusBadge status={listing.status} />
+            </BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      {/* Hero + gallery */}
+      <div className="mt-4 space-y-3">
+        {heroImage && (
+          <ViewTransition name={`listing-${listing.id}`}>
+            <div className="aspect-[21/9] overflow-hidden rounded-xl bg-muted shadow-sm ring-1 ring-border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={heroImage}
+                alt={cleanTitle(listing.title)}
+                className="h-full w-full object-cover"
+              />
+            </div>
+          </ViewTransition>
+        )}
+        {imageUrls.length > 1 && (
+          <ListingGallery images={imageUrls} alt={cleanTitle(listing.title)} />
+        )}
+      </div>
+
+      {/* Title block */}
+      <div className="mt-8 flex flex-col gap-3 border-b border-border pb-6 md:flex-row md:items-end md:justify-between md:gap-6">
+        <div className="min-w-0 flex-1">
+          <p className="text-eyebrow mb-2">
+            {listing.propertyType}
+            {listing.listingType ? ` · ${listing.listingType}` : ""}
+          </p>
+          <h1 className="text-display-md text-balance">
+            {cleanTitle(listing.title)}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {[listing.city, listing.state].filter(Boolean).join(", ")}
+            {source?.domain ? ` · ${source.domain}` : ""}
+          </p>
         </div>
+        <StatusBadge status={listing.status} />
       </div>
 
       {/* Key facts */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <FactCard
-          label="Price"
+          label="Precio"
           value={
             listing.priceCents
               ? formatPrice(listing.priceCents, listing.currency)
@@ -94,15 +129,15 @@ export default async function ListingDetailPage({
           highlight
         />
         <FactCard
-          label="Bedrooms"
+          label="Recámaras"
           value={listing.bedrooms != null ? String(listing.bedrooms) : null}
         />
         <FactCard
-          label="Bathrooms"
+          label="Baños"
           value={listing.bathrooms != null ? String(listing.bathrooms) : null}
         />
         <FactCard
-          label="Construction"
+          label="Construcción"
           value={
             listing.constructionM2 != null
               ? `${listing.constructionM2} m²`
@@ -110,21 +145,21 @@ export default async function ListingDetailPage({
           }
         />
         <FactCard
-          label="Land"
+          label="Terreno"
           value={listing.landM2 != null ? `${listing.landM2} m²` : null}
         />
         <FactCard
-          label="Parking"
+          label="Estacionamiento"
           value={
             listing.parkingSpaces != null
               ? String(listing.parkingSpaces)
               : null
           }
         />
-        <FactCard label="Source" value={source?.domain ?? null} />
+        <FactCard label="Fuente" value={source?.domain ?? null} />
         <FactCard
-          label="First seen"
-          value={listing.firstSeenAt.toLocaleDateString("en-US", {
+          label="Primer visto"
+          value={listing.firstSeenAt.toLocaleDateString("es-MX", {
             year: "numeric",
             month: "short",
             day: "numeric",
@@ -449,18 +484,25 @@ function FactCard({
   highlight?: boolean;
 }) {
   return (
-    <Card className={highlight ? "border-primary/20 bg-primary/5" : ""}>
-      <CardContent className="px-4 py-3">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {label}
-        </p>
-        <p
-          className={`mt-1 text-sm font-semibold ${highlight ? "text-primary" : ""} ${!value ? "text-muted-foreground" : ""}`}
-        >
-          {value ?? "—"}
-        </p>
-      </CardContent>
-    </Card>
+    <div
+      className={
+        "flex flex-col gap-1.5 rounded-xl p-4 ring-1 transition-colors " +
+        (highlight
+          ? "bg-card ring-foreground/25 shadow-sm"
+          : "bg-card ring-border hover:ring-foreground/15")
+      }
+    >
+      <p className="text-eyebrow">{label}</p>
+      <p
+        className={
+          "tabular-nums " +
+          (highlight ? "font-display text-xl font-medium" : "text-sm font-semibold") +
+          (!value ? " text-muted-foreground" : "")
+        }
+      >
+        {value ?? "—"}
+      </p>
+    </div>
   );
 }
 
