@@ -10,14 +10,15 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const isDark = resolvedTheme === "dark";
+  const isDark = mounted && resolvedTheme === "dark";
 
   return (
     <Button
       variant="ghost"
       size="icon-sm"
-      aria-label={isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-      onClick={() => setTheme(isDark ? "light" : "dark")}
+      aria-label={mounted ? (isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro") : "Cambiar tema"}
+      onClick={() => mounted && setTheme(isDark ? "light" : "dark")}
+      suppressHydrationWarning
     >
       {mounted ? (
         isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />
